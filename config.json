@@ -6,6 +6,7 @@
     "moveDown": "j",
     "quit": "q",
     "save": "w",
-    "pick": "p"
+    "pick": "p",
+    "reset": "r"
   }
 }
