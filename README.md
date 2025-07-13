@@ -1,5 +1,8 @@
 # TerminalChess
+
 A simple chess UI in the terminal
+
+![Chess board](./images/GUI.gif)
 
 ## Navigation
 
