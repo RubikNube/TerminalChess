@@ -1,0 +1,11 @@
+{
+  "keybindings": {
+    "moveLeft": "h",
+    "moveRight": "l",
+    "moveUp": "k",
+    "moveDown": "j",
+    "quit": "q",
+    "save": "w",
+    "pick": "p"
+  }
+}
