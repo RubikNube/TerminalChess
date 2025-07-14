@@ -4,24 +4,31 @@ package gui
 import (
 	"fmt"
 
+	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
 )
 
+type SquareColor string
+
 // constants for the colored squares
 const (
-	WhiteSquare = "." // Light square
-	BlackSquare = " " // Dark square
-	EmptySquare = " " // Empty square
+	WhiteSquare SquareColor = "." // Light square
+	BlackSquare             = " " // Dark square
+	EmptySquare             = " " // Empty square
 )
 
+type Color int
+
 const (
-	Black = iota
+	Black Color = iota
 	White
-	UndefinedColor = -1 // Represents an undefined color
+	Undefined = -1 // Represents an undefined color
 )
 
+type PieceType int
+
 const (
-	King = iota
+	King PieceType = iota
 	Queen
 	Rook
 	Bishop
@@ -31,7 +38,7 @@ const (
 )
 
 // get rune for piece type
-func pieceRune(pieceType int) rune {
+func pieceRune(pieceType PieceType) rune {
 	switch pieceType {
 	case King:
 		return '♚'
@@ -51,8 +58,8 @@ func pieceRune(pieceType int) rune {
 }
 
 type Piece struct {
-	Color int // Black or White
-	Type  int // King, Queen, Rook, Bishop, Knight, Pawn
+	Color Color     // Black or White
+	Type  PieceType // King, Queen, Rook, Bishop, Knight, Pawn
 }
 
 // ChessBoard represents a simple 8x8 chess board.
@@ -90,7 +97,7 @@ func NewChessBoard() ChessBoard {
 	// Initialize empty squares
 	for i := 2; i < 6; i++ {
 		for j := 0; j < 8; j++ {
-			board[i][j] = Piece{Color: UndefinedColor, Type: Empty} // Empty square
+			board[i][j] = Piece{Color: Undefined, Type: Empty} // Empty square
 		}
 	}
 	return board
@@ -103,10 +110,66 @@ type Cursor struct {
 	Selected bool
 }
 
-// MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol).
-func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int) {
-	b[toRow][toCol] = b[fromRow][fromCol]
-	b[fromRow][fromCol] = Piece{Color: UndefinedColor, Type: Empty}
+// MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
+func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) bool {
+	// Export current board to FEN, with correct turn
+	fen := b.ToFEN(turn)
+	chessFen, err := chess.FEN(fen)
+	if err != nil {
+		return false
+	}
+	game := chess.NewGame(chessFen)
+	moveStr := fmt.Sprintf("%c%d%c%d", 'a'+fromCol, 8-fromRow, 'a'+toCol, 8-toRow)
+
+	// Handle pawn promotion (promote to queen by default if moving to last rank)
+	piece := b[fromRow][fromCol]
+	if piece.Type == Pawn && (toRow == 0 || toRow == 7) {
+		moveStr += "q"
+	}
+
+	move, err := chess.UCINotation{}.Decode(game.Position(), moveStr)
+	if err != nil {
+		return false
+	}
+	if err := game.Move(move); err != nil {
+		return false
+	}
+
+	// Synchronize board with chess engine's position
+	newBoard := game.Position().Board()
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 8; j++ {
+			sq := chess.Square((7-i)*8 + j)
+			p := newBoard.Piece(sq)
+			if p == chess.NoPiece {
+				b[i][j] = Piece{Color: Undefined, Type: Empty}
+			} else {
+				var color Color
+				if p.Color() == chess.White {
+					color = White
+				} else {
+					color = Black
+				}
+				var typ PieceType
+				switch p.Type() {
+				case chess.King:
+					typ = King
+				case chess.Queen:
+					typ = Queen
+				case chess.Rook:
+					typ = Rook
+				case chess.Bishop:
+					typ = Bishop
+				case chess.Knight:
+					typ = Knight
+				case chess.Pawn:
+					typ = Pawn
+				}
+				b[i][j] = Piece{Color: color, Type: typ}
+			}
+		}
+	}
+	return true
 }
 
 // Move updates the cursor position by the given delta, clamped to board bounds.
@@ -156,10 +219,10 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 				bgColor = "\033[40m"
 			}
 
-			// Cursor highlight: underline
+			// Cursor highlight: underline + yellow background
 			cursorAttr := ""
 			if i == cursorRow && j == cursorCol {
-				cursorAttr = "\033[4m"
+				cursorAttr = "\033[4m\033[43m"
 			}
 
 			// Selected piece highlight: reverse video
@@ -174,4 +237,55 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 		}
 		fmt.Fprintln(v)
 	}
+}
+
+// ToFEN exports the ChessBoard to a FEN string (supports only piece placement, tracks turn, no castling/en passant).
+func (b ChessBoard) ToFEN(turn Color) string {
+	fen := ""
+	for i := 0; i < 8; i++ {
+		empty := 0
+		for j := 0; j < 8; j++ {
+			p := b[i][j]
+			if p.Type == Empty {
+				empty++
+			} else {
+				if empty > 0 {
+					fen += fmt.Sprintf("%d", empty)
+					empty = 0
+				}
+				var c rune
+				switch p.Type {
+				case King:
+					c = 'k'
+				case Queen:
+					c = 'q'
+				case Rook:
+					c = 'r'
+				case Bishop:
+					c = 'b'
+				case Knight:
+					c = 'n'
+				case Pawn:
+					c = 'p'
+				}
+				if p.Color == White {
+					c -= 32 // uppercase for white
+				}
+				fen += string(c)
+			}
+		}
+		if empty > 0 {
+			fen += fmt.Sprintf("%d", empty)
+		}
+		if i < 7 {
+			fen += "/"
+		}
+	}
+	// Use turn to set whose move it is
+	turnStr := "w"
+	if turn == Black {
+		turnStr = "b"
+	}
+	// No castling, no en passant, fullmove 1, halfmove 0
+	return fen + " " + turnStr + " - - 0 1"
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -30,11 +31,12 @@ var (
 	selectedRow int
 	selectedCol int
 	selected    bool
+	turn        gui.Color = gui.White // Track whose turn it is
 )
 
 func layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
-	if v, err := g.SetView("board", 0, 0, maxX-1, maxY-1); err != nil {
+	if v, err := g.SetView("board", 0, 0, maxX-1, maxY-4); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -43,6 +45,22 @@ func layout(g *gocui.Gui) error {
 	}
 	if v, err := g.View("board"); err == nil {
 		board.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
+	}
+	if v, err := g.SetView("info", 0, maxY-3, maxX-1, maxY-1); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Wrap = false
+	}
+	if v, err := g.View("info"); err == nil {
+		v.Clear()
+		if selected {
+			colChar := 'a' + selectedCol
+			rowChar := '8' - selectedRow
+			fmt.Fprintf(v, "Selected square: %c%c\n", colChar, rowChar)
+		} else {
+			fmt.Fprint(v, "No square selected\n")
+		}
 	}
 	return nil
 }
@@ -55,7 +73,7 @@ func moveCursor(dRow, dCol int) func(*gocui.Gui, *gocui.View) error {
 }
 
 func selectPiece(g *gocui.Gui, v *gocui.View) error {
-	if !selected && board[cursor.Row][cursor.Col].Type != gui.Empty {
+	if board[cursor.Row][cursor.Col].Type != gui.Empty {
 		selected = true
 		selectedRow = cursor.Row
 		selectedCol = cursor.Col
@@ -65,9 +83,15 @@ func selectPiece(g *gocui.Gui, v *gocui.View) error {
 
 func dropPiece(g *gocui.Gui, v *gocui.View) error {
 	if selected {
-		// Replace with correct move function from ChessBoard
-		board.MovePiece(selectedRow, selectedCol, cursor.Row, cursor.Col)
-		selected = false
+		if board.MovePiece(selectedRow, selectedCol, cursor.Row, cursor.Col, turn) {
+			selected = false
+			// Switch turn after a successful move
+			if turn == gui.White {
+				turn = gui.Black
+			} else {
+				turn = gui.White
+			}
+		}
 	}
 	return nil
 }
@@ -78,8 +102,9 @@ func quit(g *gocui.Gui, v *gocui.View) error {
 
 func reset(g *gocui.Gui, v *gocui.View) error {
 	board = gui.NewChessBoard()
-	// Reset cursor position
+	// Reset cursor position and turn
 	cursor = gui.Cursor{Row: 0, Col: 0}
+	turn = gui.White
 	return layout(g)
 }
 
