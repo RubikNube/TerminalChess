@@ -17,6 +17,7 @@ const (
 const (
 	Black = iota
 	White
+	UndefinedColor = -1 // Represents an undefined color
 )
 
 const (
@@ -26,6 +27,7 @@ const (
 	Bishop
 	Knight
 	Pawn
+	Empty = -1 // Represents an empty square
 )
 
 // get rune for piece type
@@ -88,7 +90,7 @@ func NewChessBoard() ChessBoard {
 	// Initialize empty squares
 	for i := 2; i < 6; i++ {
 		for j := 0; j < 8; j++ {
-			board[i][j] = Piece{Color: -1, Type: -1} // Empty square
+			board[i][j] = Piece{Color: UndefinedColor, Type: Empty} // Empty square
 		}
 	}
 	return board
@@ -99,6 +101,12 @@ type Cursor struct {
 	Row      int
 	Col      int
 	Selected bool
+}
+
+// MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol).
+func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int) {
+	b[toRow][toCol] = b[fromRow][fromCol]
+	b[fromRow][fromCol] = Piece{Color: UndefinedColor, Type: Empty}
 }
 
 // Move updates the cursor position by the given delta, clamped to board bounds.
@@ -116,7 +124,7 @@ func (c *Cursor) Move(dRow, dCol int) {
 // RenderToView prints the chess board to a gocui.View, showing labels only on the top and left.
 // Draws black and white squares using reverse video and bold formatting.
 // Ensures quadratic rendering by padding each square to two characters wide.
-func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int) {
+func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, selected bool, selectedRow, selectedCol int) {
 	v.Clear()
 	// Top column labels, aligned with board
 	fmt.Fprint(v, " ")
@@ -132,25 +140,31 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int) {
 			var fgColor, bgColor string
 
 			// Determine piece color
-			if piece.Color == Black {
-				fgColor = "\033[31m" // Black text (bold)
-			} else if piece.Color == White {
-				fgColor = "\033[34m" // White text (bold)
-			} else {
-				fgColor = "\033[0m" // Default text color for empty squares
+			switch piece.Color {
+			case Black:
+				fgColor = "\033[31m"
+			case White:
+				fgColor = "\033[34m"
+			default:
+				fgColor = "\033[0m"
 			}
 
 			// Determine square color
 			if (i+j)%2 == 0 {
-				bgColor = "\033[47m" // White square background
+				bgColor = "\033[47m"
 			} else {
-				bgColor = "\033[40m" // Dark gray for black square background
+				bgColor = "\033[40m"
 			}
 
 			// Cursor highlight: underline
 			cursorAttr := ""
 			if i == cursorRow && j == cursorCol {
 				cursorAttr = "\033[4m"
+			}
+
+			// Selected piece highlight: reverse video
+			if selected && i == selectedRow && j == selectedCol {
+				cursorAttr += "\033[7m"
 			}
 
 			// Get the piece rune

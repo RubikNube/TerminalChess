@@ -25,8 +25,11 @@ func loadConfig(path string) (Config, error) {
 }
 
 var (
-	board  gui.ChessBoard
-	cursor gui.Cursor
+	board       gui.ChessBoard
+	cursor      gui.Cursor
+	selectedRow int
+	selectedCol int
+	selected    bool
 )
 
 func layout(g *gocui.Gui) error {
@@ -39,7 +42,7 @@ func layout(g *gocui.Gui) error {
 		v.Wrap = false
 	}
 	if v, err := g.View("board"); err == nil {
-		board.RenderToView(v, cursor.Row, cursor.Col)
+		board.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
 	}
 	return nil
 }
@@ -52,7 +55,20 @@ func moveCursor(dRow, dCol int) func(*gocui.Gui, *gocui.View) error {
 }
 
 func selectPiece(g *gocui.Gui, v *gocui.View) error {
-	cursor.Selected = !cursor.Selected
+	if !selected && board[cursor.Row][cursor.Col].Type != gui.Empty {
+		selected = true
+		selectedRow = cursor.Row
+		selectedCol = cursor.Col
+	}
+	return nil
+}
+
+func dropPiece(g *gocui.Gui, v *gocui.View) error {
+	if selected {
+		// Replace with correct move function from ChessBoard
+		board.MovePiece(selectedRow, selectedCol, cursor.Row, cursor.Col)
+		selected = false
+	}
 	return nil
 }
 
@@ -94,12 +110,14 @@ func main() {
 	selectKey := []rune(keybindings["pick"])[0]
 	quitKey := []rune(keybindings["quit"])[0]
 	resetKey := []rune(keybindings["reset"])[0]
+	dropKey := []rune(keybindings["drop"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveCursor(0, -1))
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveCursor(0, 1))
 	g.SetKeybinding("", moveUpKey, gocui.ModNone, moveCursor(-1, 0))
 	g.SetKeybinding("", moveDownKey, gocui.ModNone, moveCursor(1, 0))
 	g.SetKeybinding("", selectKey, gocui.ModNone, selectPiece)
+	g.SetKeybinding("", dropKey, gocui.ModNone, dropPiece)
 	g.SetKeybinding("", quitKey, gocui.ModNone, quit)
 	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
 
