@@ -3,6 +3,7 @@ package gui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
@@ -36,26 +37,6 @@ const (
 	Pawn
 	Empty = -1 // Represents an empty square
 )
-
-// get rune for piece type
-func pieceRune(pieceType PieceType) rune {
-	switch pieceType {
-	case King:
-		return '♚'
-	case Queen:
-		return '♛'
-	case Rook:
-		return '♜'
-	case Bishop:
-		return '♝'
-	case Knight:
-		return '♞'
-	case Pawn:
-		return '♟'
-	default:
-		return ' '
-	}
-}
 
 type Piece struct {
 	Color Color     // Black or White
@@ -189,53 +170,64 @@ func (c *Cursor) Move(dRow, dCol int) {
 // Ensures quadratic rendering by padding each square to two characters wide.
 func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, selected bool, selectedRow, selectedCol int) {
 	v.Clear()
+	artHeight := 4
+	artWidth := 4 // Each ASCII art piece line is 5 characters wide
 	// Top column labels, aligned with board
-	fmt.Fprint(v, " ")
+	squareWidth := artWidth*2 + 2 // doubled chars + 2 spaces padding
+	fmt.Fprint(v, "  ")
 	for col := 0; col < 8; col++ {
-		fmt.Fprintf(v, " %c", 'a'+col)
+		label := fmt.Sprintf("%c", 'a'+col)
+		pad := (squareWidth - len(label)) / 2
+		fmt.Fprint(v, strings.Repeat(" ", pad))
+		fmt.Fprint(v, label)
+		fmt.Fprint(v, strings.Repeat(" ", squareWidth-pad-len(label)))
 	}
 	fmt.Fprintln(v)
 	for i := 0; i < 8; i++ {
-		// Row label on the left
-		fmt.Fprintf(v, "%d ", 8-i)
-		for j := 0; j < 8; j++ {
-			piece := b[i][j]
-			var fgColor, bgColor string
-
-			// Determine piece color
-			switch piece.Color {
-			case Black:
-				fgColor = "\033[31m"
-			case White:
-				fgColor = "\033[34m"
-			default:
-				fgColor = "\033[0m"
-			}
-
-			// Determine square color
-			if (i+j)%2 == 0 {
-				bgColor = "\033[47m"
+		for line := 0; line < artHeight; line++ {
+			if line == 0 {
+				fmt.Fprintf(v, "%d ", 8-i)
 			} else {
-				bgColor = "\033[40m"
+				fmt.Fprint(v, "  ")
 			}
+			for j := 0; j < 8; j++ {
+				piece := b[i][j]
+				art := asciiPieces[piece.Type][piece.Color]
+				cell := art[line]
+				var fgColor, bgColor string
+				var reset string = "\033[0m"
 
-			// Cursor highlight: underline + yellow background
-			cursorAttr := ""
-			if i == cursorRow && j == cursorCol {
-				cursorAttr = "\033[4m\033[43m"
+				// Determine piece color
+				switch piece.Color {
+				case Black:
+					fgColor = "\033[31m"
+				case White:
+					fgColor = "\033[34m"
+				default:
+					fgColor = "\033[0m"
+				}
+
+				// Determine square color
+				if (i+j)%2 == 0 {
+					bgColor = "\033[47m"
+				} else {
+					bgColor = "\033[40m"
+				} // Cursor highlight: underline + yellow background
+				cursorAttr := ""
+				if i == cursorRow && j == cursorCol {
+					cursorAttr = "\033[4m\033[43m"
+				}
+
+				// Selected piece highlight: reverse video
+				if selected && i == selectedRow && j == selectedCol {
+					cursorAttr += "\033[7m"
+				}
+				// Double each character in the cell for horizontal scaling
+				for _, ch := range cell {
+					fmt.Fprintf(v, "%s%s%s%c%c%s", fgColor, bgColor, cursorAttr, ch, ch, reset)
+				}
 			}
-
-			// Selected piece highlight: reverse video
-			if selected && i == selectedRow && j == selectedCol {
-				cursorAttr += "\033[7m"
-			}
-
-			// Get the piece rune
-			pieceRune := pieceRune(piece.Type)
-			cell := fmt.Sprintf("%s%s%s%-2c\033[0m", fgColor, bgColor, cursorAttr, pieceRune)
-			fmt.Fprint(v, cell)
 		}
-		fmt.Fprintln(v)
 	}
 }
 
@@ -288,4 +280,97 @@ func (b ChessBoard) ToFEN(turn Color) string {
 	}
 	// No castling, no en passant, fullmove 1, halfmove 0
 	return fen + " " + turnStr + " - - 0 1"
+}
+
+// ASCII art for each piece type and color
+var asciiPieces = map[PieceType]map[Color][]string{
+	King: {
+		White: {
+			" /^\\ ",
+			" |+| ",
+			"/___\\",
+			" | | ",
+		},
+		Black: {
+			" /^\\ ",
+			" |#| ",
+			"/___\\",
+			" | | ",
+		},
+	},
+	Queen: {
+		White: {
+			" \\|/ ",
+			" -O- ",
+			"/___\\",
+			" | | ",
+		},
+		Black: {
+			" \\|/ ",
+			" -@- ",
+			"/___\\",
+			" | | ",
+		},
+	},
+	Rook: {
+		White: {
+			"|‾‾| ",
+			"|  | ",
+			"|__| ",
+			"     ",
+		},
+		Black: {
+			"|==| ",
+			"|  | ",
+			"|__| ",
+			"     ",
+		},
+	},
+	Bishop: {
+		White: {
+			" /\\  ",
+			"(><) ",
+			"/__\\ ",
+			" | | ",
+		},
+		Black: {
+			" /\\  ",
+			"{}{} ",
+			"/__\\ ",
+			" | | ",
+		},
+	},
+	Knight: {
+		White: {
+			" /)  ",
+			"( >  ",
+			"/_/  ",
+			"     ",
+		},
+		Black: {
+			" /)  ",
+			"( #  ",
+			"/_/  ",
+			"     ",
+		},
+	},
+	Pawn: {
+		White: {
+			"  o  ",
+			" /|\\ ",
+			" / \\ ",
+			"/___\\",
+		},
+		Black: {
+			"  @  ",
+			" /|\\ ",
+			" / \\ ",
+			"/___\\",
+		},
+	},
+	Empty: {
+		White:     {"     ", "     ", "     ", "     "},
+		Black:     {"     ", "     ", "     ", "     "},
+		Undefined: {"     ", "     ", "     ", "     "},
+	},
 }
