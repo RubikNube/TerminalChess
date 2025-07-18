@@ -195,7 +195,7 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 				art := asciiPieces[piece.Type][piece.Color]
 				cell := art[line]
 				var fgColor, bgColor string
-				var reset string = "\033[0m"
+				reset := "\033[0m"
 
 				// Determine piece color
 				switch piece.Color {
@@ -212,7 +212,8 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 					bgColor = "\033[47m"
 				} else {
 					bgColor = "\033[40m"
-				} // Cursor highlight: underline + yellow background
+				}
+				// Cursor highlight: underline + yellow background
 				cursorAttr := ""
 				if i == cursorRow && j == cursorCol {
 					cursorAttr = "\033[4m\033[43m"
@@ -227,6 +228,7 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 					fmt.Fprintf(v, "%s%s%s%c%c%s", fgColor, bgColor, cursorAttr, ch, ch, reset)
 				}
 			}
+			fmt.Fprintln(v)
 		}
 	}
 }
