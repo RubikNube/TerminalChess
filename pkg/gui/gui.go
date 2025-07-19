@@ -92,6 +92,7 @@ type Cursor struct {
 }
 
 // MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
+// Now supports castling by allowing king and rook moves as per chess rules.
 func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) bool {
 	// Export current board to FEN, with correct turn
 	fen := b.ToFEN(turn)
@@ -108,22 +109,47 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 		moveStr += "q"
 	}
 
+	// Try normal move
 	move, err := chess.UCINotation{}.Decode(game.Position(), moveStr)
 	if err != nil {
+		// Try castling if king moves two squares horizontally
+		if piece.Type == King && fromRow == toRow && abs(fromCol-toCol) == 2 {
+			var castleMove *chess.Move
+			if toCol == 6 { // kingside
+				castleMove, _ = chess.UCINotation{}.Decode(game.Position(), "e1g1")
+				if turn == Black {
+					castleMove, _ = chess.UCINotation{}.Decode(game.Position(), "e8g8")
+				}
+			} else if toCol == 2 { // queenside
+				castleMove, _ = chess.UCINotation{}.Decode(game.Position(), "e1c1")
+				if turn == Black {
+					castleMove, _ = chess.UCINotation{}.Decode(game.Position(), "e8c8")
+				}
+			}
+			if castleMove != nil && game.Move(castleMove) == nil {
+				updateBoardFromGame(b, game)
+				return true
+			}
+		}
 		return false
 	}
 	if err := game.Move(move); err != nil {
 		return false
 	}
 
-	// Synchronize board with chess engine's position
+	updateBoardFromGame(b, game)
+	return true
+}
+
+// updateBoardFromGame updates the ChessBoard from the chess.Game position.
+func updateBoardFromGame(b *ChessBoard, game *chess.Game) {
 	newBoard := game.Position().Board()
 	for i := 0; i < 8; i++ {
 		for j := 0; j < 8; j++ {
 			sq := chess.Square((7-i)*8 + j)
 			p := newBoard.Piece(sq)
 			if p == chess.NoPiece {
-				b[i][j] = Piece{Color: Undefined, Type: Empty}
+				(*b)[i][j] = Piece{Color: Undefined, Type: Empty}
 			} else {
 				var color Color
 				if p.Color() == chess.White {
@@ -146,11 +172,18 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 				case chess.Pawn:
 					typ = Pawn
 				}
-				b[i][j] = Piece{Color: color, Type: typ}
+				(*b)[i][j] = Piece{Color: color, Type: typ}
 			}
 		}
 	}
-	return true
+}
+
+// abs returns the absolute value of an integer.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // Move updates the cursor position by the given delta, clamped to board bounds.
@@ -233,7 +266,7 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 	}
 }
 
-// ToFEN exports the ChessBoard to a FEN string (supports only piece placement, tracks turn, no castling/en passant).
+// ToFEN exports the ChessBoard to a FEN string (supports only piece placement, tracks turn, and basic castling rights).
 func (b ChessBoard) ToFEN(turn Color) string {
 	fen := ""
 	for i := 0; i < 8; i++ {
@@ -280,8 +313,29 @@ func (b ChessBoard) ToFEN(turn Color) string {
 	if turn == Black {
 		turnStr = "b"
 	}
-	// No castling, no en passant, fullmove 1, halfmove 0
-	return fen + " " + turnStr + " - - 0 1"
+	// Compute castling rights (simple check: if king/rook are on original squares)
+	castle := ""
+	if b[7][4].Type == King && b[7][4].Color == White {
+		if b[7][7].Type == Rook && b[7][7].Color == White {
+			castle += "K"
+		}
+		if b[7][0].Type == Rook && b[7][0].Color == White {
+			castle += "Q"
+		}
+	}
+	if b[0][4].Type == King && b[0][4].Color == Black {
+		if b[0][7].Type == Rook && b[0][7].Color == Black {
+			castle += "k"
+		}
+		if b[0][0].Type == Rook && b[0][0].Color == Black {
+			castle += "q"
+		}
+	}
+	if castle == "" {
+		castle = "-"
+	}
+	// No en passant, fullmove 1, halfmove 0
+	return fen + " " + turnStr + " " + castle + " - 0 1"
 }
 
 //	                                          www www  _+_ _+_
