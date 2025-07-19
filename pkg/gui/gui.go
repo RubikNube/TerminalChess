@@ -170,8 +170,8 @@ func (c *Cursor) Move(dRow, dCol int) {
 // Ensures quadratic rendering by padding each square to two characters wide.
 func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, selected bool, selectedRow, selectedCol int) {
 	v.Clear()
-	artHeight := 4
-	artWidth := 4 // Each ASCII art piece line is 5 characters wide
+	artHeight := 7
+	artWidth := 7
 	// Top column labels, aligned with board
 	squareWidth := artWidth*2 + 2 // doubled chars + 2 spaces padding
 	fmt.Fprint(v, "  ")
@@ -225,7 +225,7 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 				}
 				// Double each character in the cell for horizontal scaling
 				for _, ch := range cell {
-					fmt.Fprintf(v, "%s%s%s%c%c%s", fgColor, bgColor, cursorAttr, ch, ch, reset)
+					fmt.Fprintf(v, "%s%s%s%c%s", fgColor, bgColor, cursorAttr, ch, reset)
 				}
 			}
 			fmt.Fprintln(v)
@@ -284,95 +284,164 @@ func (b ChessBoard) ToFEN(turn Color) string {
 	return fen + " " + turnStr + " - - 0 1"
 }
 
+//	                                          www www  _+_ _+_
+//	 _   _    ,^.  ,^.   o    o    uuuu uuuu  \ / \#/  \ / \#/
+//	( ) (#)  (  '\(##'\ ( /) (#/)  |  | |##|  ( ) (#)  ( ) (#)
+//	/ \ /#\  |  \ |##\  /  \ /##\  /  \ /##\  / \ /#\  / \ /#\
+//	=== ===  ==== ====  ==== ====  ==== ====  === ===  === ===PhS
+//
 // ASCII art for each piece type and color
 var asciiPieces = map[PieceType]map[Color][]string{
 	King: {
 		White: {
-			" /^\\ ",
-			" |+| ",
-			"/___\\",
-			" | | ",
+			"              ",
+			"      ██      ",
+			"    ██████    ",
+			"      ██      ",
+			"     ████     ",
+			"     ████     ",
+			"   ████████   ",
 		},
 		Black: {
-			" /^\\ ",
-			" |#| ",
-			"/___\\",
-			" | | ",
+			"             ",
+			"     ██      ",
+			"   ██████    ",
+			"     ██      ",
+			"    ████     ",
+			"    ████     ",
+			"  ████████   ",
 		},
 	},
 	Queen: {
 		White: {
-			" \\|/ ",
-			" -O- ",
-			"/___\\",
-			" | | ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"     ██      ",
+			"    ████     ",
+			"     ██      ",
+			"   ██████    ",
 		},
 		Black: {
-			" \\|/ ",
-			" -@- ",
-			"/___\\",
-			" | | ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"     ██      ",
+			"    ████     ",
+			"     ██      ",
+			"   ██████    ",
 		},
 	},
 	Rook: {
 		White: {
-			"|‾‾| ",
-			"|  | ",
-			"|__| ",
-			"     ",
+			"             ",
+			"             ",
+			"    ████     ",
+			"    █ ██     ",
+			"    ████     ",
+			"    ████     ",
+			"   ██████    ",
 		},
 		Black: {
-			"|==| ",
-			"|  | ",
-			"|__| ",
-			"     ",
+			"             ",
+			"             ",
+			"    ████     ",
+			"    █ ██     ",
+			"    ████     ",
+			"    ████     ",
+			"   ██████    ",
 		},
 	},
 	Bishop: {
 		White: {
-			" /\\  ",
-			"(><) ",
-			"/__\\ ",
-			" | | ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"    █ ██     ",
+			"    ████     ",
+			"   ██████    ",
 		},
 		Black: {
-			" /\\  ",
-			"{}{} ",
-			"/__\\ ",
-			" | | ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"    █ ██     ",
+			"    ████     ",
+			"   ██████    ",
 		},
 	},
 	Knight: {
 		White: {
-			" /)  ",
-			"( >  ",
-			"/_/  ",
-			"     ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"     ███     ",
+			"    ███      ",
+			"   ██████    ",
 		},
 		Black: {
-			" /)  ",
-			"( #  ",
-			"/_/  ",
-			"     ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"     ███     ",
+			"    ███      ",
+			"   ██████    ",
 		},
 	},
 	Pawn: {
 		White: {
-			"  o  ",
-			" /|\\ ",
-			" / \\ ",
-			"/___\\",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"   ██████    ",
 		},
 		Black: {
-			"  @  ",
-			" /|\\ ",
-			" / \\ ",
-			"/___\\",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"     ██      ",
+			"    ████     ",
+			"   ██████    ",
 		},
 	},
 	Empty: {
-		White:     {"     ", "     ", "     ", "     "},
-		Black:     {"     ", "     ", "     ", "     "},
-		Undefined: {"     ", "     ", "     ", "     "},
+		White: {
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+		},
+		Black: {
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+		},
+		Undefined: {
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+			"             ",
+		},
 	},
 }
