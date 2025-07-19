@@ -3,6 +3,7 @@ package gui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/corentings/chess"
@@ -43,8 +44,17 @@ type Piece struct {
 	Type  PieceType // King, Queen, Rook, Bishop, Knight, Pawn
 }
 
+// Cursor represents the position and selection state on the board.
+type Cursor struct {
+	Row      int
+	Col      int
+	Selected bool
+}
+
 // ChessBoard represents a simple 8x8 chess board.
 type ChessBoard [8][8]Piece
+
+var asciiPieces = map[PieceType]map[Color][]string{}
 
 // NewChessBoard initializes a chess board with the standard starting position.
 func NewChessBoard() ChessBoard {
@@ -82,13 +92,6 @@ func NewChessBoard() ChessBoard {
 		}
 	}
 	return board
-}
-
-// Cursor represents the position and selection state on the board.
-type Cursor struct {
-	Row      int
-	Col      int
-	Selected bool
 }
 
 // MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
@@ -338,164 +341,57 @@ func (b ChessBoard) ToFEN(turn Color) string {
 	return fen + " " + turnStr + " " + castle + " - 0 1"
 }
 
-//	                                          www www  _+_ _+_
-//	 _   _    ,^.  ,^.   o    o    uuuu uuuu  \ / \#/  \ / \#/
-//	( ) (#)  (  '\(##'\ ( /) (#/)  |  | |##|  ( ) (#)  ( ) (#)
-//	/ \ /#\  |  \ |##\  /  \ /##\  /  \ /##\  / \ /#\  / \ /#\
-//	=== ===  ==== ====  ==== ====  ==== ====  === ===  === ===PhS
-//
-// ASCII art for each piece type and color
-var asciiPieces = map[PieceType]map[Color][]string{
-	King: {
-		White: {
-			"              ",
-			"      ██      ",
-			"    ██████    ",
-			"      ██      ",
-			"     ████     ",
-			"     ████     ",
-			"   ████████   ",
-		},
-		Black: {
-			"             ",
-			"     ██      ",
-			"   ██████    ",
-			"     ██      ",
-			"    ████     ",
-			"    ████     ",
-			"  ████████   ",
-		},
-	},
-	Queen: {
-		White: {
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"     ██      ",
-			"    ████     ",
-			"     ██      ",
-			"   ██████    ",
-		},
-		Black: {
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"     ██      ",
-			"    ████     ",
-			"     ██      ",
-			"   ██████    ",
-		},
-	},
-	Rook: {
-		White: {
-			"             ",
-			"             ",
-			"    ████     ",
-			"    █ ██     ",
-			"    ████     ",
-			"    ████     ",
-			"   ██████    ",
-		},
-		Black: {
-			"             ",
-			"             ",
-			"    ████     ",
-			"    █ ██     ",
-			"    ████     ",
-			"    ████     ",
-			"   ██████    ",
-		},
-	},
-	Bishop: {
-		White: {
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"    █ ██     ",
-			"    ████     ",
-			"   ██████    ",
-		},
-		Black: {
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"    █ ██     ",
-			"    ████     ",
-			"   ██████    ",
-		},
-	},
-	Knight: {
-		White: {
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"     ███     ",
-			"    ███      ",
-			"   ██████    ",
-		},
-		Black: {
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"     ███     ",
-			"    ███      ",
-			"   ██████    ",
-		},
-	},
-	Pawn: {
-		White: {
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"   ██████    ",
-		},
-		Black: {
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"     ██      ",
-			"    ████     ",
-			"   ██████    ",
-		},
-	},
-	Empty: {
-		White: {
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-		},
-		Black: {
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-		},
-		Undefined: {
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-			"             ",
-		},
-	},
+func LoadAsciiPieces(pieceFolder string) error {
+	// Ensure the piece folder exists
+	if _, err := os.Stat(pieceFolder); os.IsNotExist(err) {
+		return fmt.Errorf("piece folder does not exist: %s", pieceFolder)
+	}
+
+	pieceFiles := map[PieceType]string{
+		King:   pieceFolder + "/king.txt",
+		Queen:  pieceFolder + "/queen.txt",
+		Rook:   pieceFolder + "/rook.txt",
+		Bishop: pieceFolder + "/bishop.txt",
+		Knight: pieceFolder + "/knight.txt",
+		Pawn:   pieceFolder + "/pawn.txt",
+	}
+
+	// Initialize asciiPieces map
+	asciiPieces = make(map[PieceType]map[Color][]string)
+
+	for typ, path := range pieceFiles {
+		lines, err := readAsciiArtFile(path)
+		if err != nil {
+			return err
+		}
+		if asciiPieces[typ] == nil {
+			asciiPieces[typ] = map[Color][]string{}
+		}
+		asciiPieces[typ][White] = lines
+		asciiPieces[typ][Black] = lines // Optionally, use different files for Black
+	}
+	// Empty and Undefined pieces
+	empty := make([]string, 7)
+	for i := range empty {
+		empty[i] = "              "
+	}
+	asciiPieces[Empty] = map[Color][]string{
+		White:     empty,
+		Black:     empty,
+		Undefined: empty,
+	}
+	return nil
+}
+
+func readAsciiArtFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	// Remove empty trailing lines
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines, nil
 }

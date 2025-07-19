@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/RubikNube/TerminalChess/pkg/gui"
 	"github.com/jroimartin/gocui"
@@ -122,6 +123,11 @@ func main() {
 	}
 	defer g.Close()
 
+	defaultPiecesPath := filepath.Join("assets", "pieces", "default")
+	err = gui.LoadAsciiPieces(defaultPiecesPath)
+	if err != nil {
+		log.Panicln("Failed to load ASCII pieces:", err)
+	}
 	board = gui.NewChessBoard()
 	cursor = gui.Cursor{Row: 0, Col: 0}
 
