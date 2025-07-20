@@ -8,6 +8,7 @@
     "save": "w",
     "pick": "p",
     "drop": "d",
-    "reset": "r"
+    "reset": "r",
+    "toggleHistory": "t"
   }
 }

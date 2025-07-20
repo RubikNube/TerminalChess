@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/RubikNube/TerminalChess/pkg/history"
 	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
 )
@@ -95,7 +96,7 @@ func NewChessBoard() ChessBoard {
 }
 
 // MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
-// Now supports castling by allowing king and rook moves as per chess rules.
+// Now supports castling and en passant by allowing king, rook, and pawn moves as per chess rules.
 func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) bool {
 	// Export current board to FEN, with correct turn
 	fen := b.ToFEN(turn)
@@ -131,6 +132,17 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 			}
 			if castleMove != nil && game.Move(castleMove) == nil {
 				updateBoardFromGame(b, game)
+				history.AddMove(castleMove.String())
+				return true
+			}
+		}
+		// Try en passant if pawn moves diagonally to an empty square
+		if piece.Type == Pawn && fromRow != toRow && fromCol != toCol && b[toRow][toCol].Type == Empty {
+			// En passant move string is the same as normal pawn capture
+			move, err = chess.UCINotation{}.Decode(game.Position(), moveStr)
+			if err == nil && game.Move(move) == nil {
+				updateBoardFromGame(b, game)
+				history.AddMove(move.String())
 				return true
 			}
 		}
@@ -141,6 +153,7 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 	}
 
 	updateBoardFromGame(b, game)
+	history.AddMove(move.String())
 	return true
 }
 
@@ -216,16 +229,18 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 		pad := (squareWidth - len(label)) / 2
 		fmt.Fprint(v, strings.Repeat(" ", pad))
 		fmt.Fprint(v, label)
-		fmt.Fprint(v, strings.Repeat(" ", squareWidth-pad-len(label)))
+		fmt.Fprint(v, strings.Repeat(" ", squareWidth-pad-len(label)-2))
 	}
 	fmt.Fprintln(v)
 	for i := 0; i < 8; i++ {
 		for line := 0; line < artHeight; line++ {
-			if line == 0 {
-				fmt.Fprintf(v, "%d ", 8-i)
+			var rowLabel string
+			if line == artHeight/2 {
+				rowLabel = fmt.Sprintf("%d ", 8-i)
 			} else {
-				fmt.Fprint(v, "  ")
+				rowLabel = "  "
 			}
+			fmt.Fprint(v, rowLabel)
 			for j := 0; j < 8; j++ {
 				piece := b[i][j]
 				art := asciiPieces[piece.Type][piece.Color]
@@ -381,6 +396,11 @@ func LoadAsciiPieces(pieceFolder string) error {
 		Undefined: empty,
 	}
 	return nil
+}
+
+// GetMoveHistory returns the move history as a slice of strings.
+func GetMoveHistory() []string {
+	return history.GetHistory()
 }
 
 func readAsciiArtFile(path string) ([]string, error) {

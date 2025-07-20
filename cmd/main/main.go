@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/RubikNube/TerminalChess/pkg/gui"
+	"github.com/RubikNube/TerminalChess/pkg/history"
 	"github.com/jroimartin/gocui"
 )
 
@@ -33,11 +34,21 @@ var (
 	selectedCol int
 	selected    bool
 	turn        gui.Color = gui.White // Track whose turn it is
+	showHistory bool      = true      // Track if history view is shown
 )
 
 func layout(g *gocui.Gui) error {
-	maxX, maxY := g.Size()
-	if v, err := g.SetView("board", 0, 0, maxX-1, maxY-4); err != nil {
+	_, maxY := g.Size()
+	historyWidth := 20
+
+	// Calculate the exact width needed for the chessboard view
+	artWidth := 7
+	squareWidth := artWidth*2 + 2
+	offset := 13
+	boardWidth := 2 + 8*squareWidth - offset // 2 for left label, 8 squares
+
+	// Board view on the left
+	if v, err := g.SetView("board", 0, 0, boardWidth-1, maxY-4); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -47,7 +58,32 @@ func layout(g *gocui.Gui) error {
 	if v, err := g.View("board"); err == nil {
 		board.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
 	}
-	if v, err := g.SetView("info", 0, maxY-3, maxX-1, maxY-1); err != nil {
+
+	// History view on the right (only if showHistory is true)
+	if showHistory {
+		if v, err := g.SetView("history", boardWidth, 0, boardWidth+historyWidth-1, maxY-1); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.Title = "Move History"
+			v.Wrap = false
+		}
+		if v, err := g.View("history"); err == nil {
+			v.Clear()
+			historyLines := history.GetMoveHistorySAN()
+			for _, line := range historyLines {
+				fmt.Fprintln(v, line)
+			}
+		}
+	} else {
+		// If the view exists but should not be shown, delete it
+		if _, err := g.View("history"); err == nil {
+			g.DeleteView("history")
+		}
+	}
+
+	// Info view below the board
+	if v, err := g.SetView("info", 0, maxY-3, boardWidth-1, maxY-1); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -109,6 +145,11 @@ func reset(g *gocui.Gui, v *gocui.View) error {
 	return layout(g)
 }
 
+func toggleHistory(g *gocui.Gui, v *gocui.View) error {
+	showHistory = !showHistory
+	return nil // layout will be called automatically on next refresh
+}
+
 func main() {
 	// Load config
 	cfg, err := loadConfig("config.json")
@@ -142,6 +183,7 @@ func main() {
 	quitKey := []rune(keybindings["quit"])[0]
 	resetKey := []rune(keybindings["reset"])[0]
 	dropKey := []rune(keybindings["drop"])[0]
+	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveCursor(0, -1))
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveCursor(0, 1))
@@ -151,6 +193,7 @@ func main() {
 	g.SetKeybinding("", dropKey, gocui.ModNone, dropPiece)
 	g.SetKeybinding("", quitKey, gocui.ModNone, quit)
 	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
+	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
