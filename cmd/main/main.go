@@ -170,7 +170,7 @@ func main() {
 		log.Panicln("Failed to load ASCII pieces:", err)
 	}
 	board = gui.NewChessBoard()
-	cursor = gui.Cursor{Row: 0, Col: 0}
+	cursor = gui.Cursor{Row: 6, Col: 4}
 
 	g.SetManagerFunc(layout)
 

@@ -264,10 +264,10 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 				} else {
 					bgColor = "\033[40m"
 				}
-				// Cursor highlight: underline + yellow background
+				// Cursor highlight: yellow background only (no underline)
 				cursorAttr := ""
 				if i == cursorRow && j == cursorCol {
-					cursorAttr = "\033[4m\033[43m"
+					cursorAttr = "\033[43m"
 				}
 
 				// Selected piece highlight: reverse video
