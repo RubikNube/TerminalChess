@@ -142,6 +142,7 @@ func reset(g *gocui.Gui, v *gocui.View) error {
 	// Reset cursor position and turn
 	cursor = gui.Cursor{Row: 0, Col: 0}
 	turn = gui.White
+	history.ClearHistory()
 	return layout(g)
 }
 
