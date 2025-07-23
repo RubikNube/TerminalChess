@@ -56,6 +56,7 @@ type Cursor struct {
 type ChessBoard [8][8]Piece
 
 var asciiPieces = map[PieceType]map[Color][]string{}
+var BoardFlipped bool = false
 
 // NewChessBoard initializes a chess board with the standard starting position.
 func NewChessBoard() ChessBoard {
@@ -214,10 +215,11 @@ func (c *Cursor) Move(dRow, dCol int) {
 	}
 }
 
-// RenderToView prints the chess board to a gocui.View, showing labels only on the top and left.
-// Draws black and white squares using reverse video and bold formatting.
-// Ensures quadratic rendering by padding each square to two characters wide.
 func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, selected bool, selectedRow, selectedCol int) {
+	b.RenderToViewFlipped(v, cursorRow, cursorCol, selected, selectedRow, selectedCol, BoardFlipped)
+}
+
+func (b ChessBoard) RenderToViewFlipped(v *gocui.View, cursorRow, cursorCol int, selected bool, selectedRow, selectedCol int, flipped bool) {
 	v.Clear()
 	artHeight := 7
 	artWidth := 7
@@ -225,7 +227,13 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 	squareWidth := artWidth*2 + 2 // doubled chars + 2 spaces padding
 	fmt.Fprint(v, "  ")
 	for col := 0; col < 8; col++ {
-		label := fmt.Sprintf("%c", 'a'+col)
+		var labelCol int
+		if flipped {
+			labelCol = 7 - col
+		} else {
+			labelCol = col
+		}
+		label := fmt.Sprintf("%c", 'a'+labelCol)
 		pad := (squareWidth - len(label)) / 2
 		fmt.Fprint(v, strings.Repeat(" ", pad))
 		fmt.Fprint(v, label)
@@ -233,16 +241,28 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 	}
 	fmt.Fprintln(v)
 	for i := 0; i < 8; i++ {
+		var row int
+		if flipped {
+			row = 7 - i
+		} else {
+			row = i
+		}
 		for line := 0; line < artHeight; line++ {
 			var rowLabel string
 			if line == artHeight/2 {
-				rowLabel = fmt.Sprintf("%d ", 8-i)
+				rowLabel = fmt.Sprintf("%d ", 8-row)
 			} else {
 				rowLabel = "  "
 			}
 			fmt.Fprint(v, rowLabel)
 			for j := 0; j < 8; j++ {
-				piece := b[i][j]
+				var col int
+				if flipped {
+					col = 7 - j
+				} else {
+					col = j
+				}
+				piece := b[row][col]
 				art := asciiPieces[piece.Type][piece.Color]
 				cell := art[line]
 				var fgColor, bgColor string
@@ -259,19 +279,19 @@ func (b ChessBoard) RenderToView(v *gocui.View, cursorRow, cursorCol int, select
 				}
 
 				// Determine square color
-				if (i+j)%2 == 0 {
+				if (row+col)%2 == 0 {
 					bgColor = "\033[47m"
 				} else {
 					bgColor = "\033[40m"
 				}
 				// Cursor highlight: yellow background only (no underline)
 				cursorAttr := ""
-				if i == cursorRow && j == cursorCol {
+				if row == cursorRow && col == cursorCol {
 					cursorAttr = "\033[43m"
 				}
 
 				// Selected piece highlight: reverse video
-				if selected && i == selectedRow && j == selectedCol {
+				if selected && row == selectedRow && col == selectedCol {
 					cursorAttr += "\033[7m"
 				}
 				// Double each character in the cell for horizontal scaling
@@ -414,4 +434,9 @@ func readAsciiArtFile(path string) ([]string, error) {
 		lines = lines[:len(lines)-1]
 	}
 	return lines, nil
+}
+
+// ToggleBoardOrientation toggles the board orientation (flipped/unflipped).
+func ToggleBoardOrientation() {
+	BoardFlipped = !BoardFlipped
 }

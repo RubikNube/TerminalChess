@@ -9,6 +9,7 @@
     "pick": "p",
     "drop": "d",
     "reset": "r",
-    "toggleHistory": "t"
+    "toggleHistory": "t",
+    "switchBoard": "b"
   }
 }

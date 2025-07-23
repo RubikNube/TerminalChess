@@ -151,6 +151,43 @@ func toggleHistory(g *gocui.Gui, v *gocui.View) error {
 	return nil // layout will be called automatically on next refresh
 }
 
+func switchBoard(g *gocui.Gui, v *gocui.View) error {
+	gui.ToggleBoardOrientation()
+	return nil
+}
+
+func moveLeft(g *gocui.Gui, v *gocui.View) error {
+	if gui.BoardFlipped {
+		return moveCursor(0, 1)(g, v)
+	}
+
+	return moveCursor(0, -1)(g, v)
+}
+
+func moveRight(g *gocui.Gui, v *gocui.View) error {
+	if gui.BoardFlipped {
+		return moveCursor(0, -1)(g, v)
+	}
+
+	return moveCursor(0, 1)(g, v)
+}
+
+func moveUp(g *gocui.Gui, v *gocui.View) error {
+	if gui.BoardFlipped {
+		return moveCursor(1, 0)(g, v)
+	}
+
+	return moveCursor(-1, 0)(g, v)
+}
+
+func moveDown(g *gocui.Gui, v *gocui.View) error {
+	if gui.BoardFlipped {
+		return moveCursor(-1, 0)(g, v)
+	}
+
+	return moveCursor(1, 0)(g, v)
+}
+
 func main() {
 	// Load config
 	cfg, err := loadConfig("config.json")
@@ -185,16 +222,18 @@ func main() {
 	resetKey := []rune(keybindings["reset"])[0]
 	dropKey := []rune(keybindings["drop"])[0]
 	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
+	switchBoardKey := []rune(keybindings["switchBoard"])[0]
 
-	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveCursor(0, -1))
-	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveCursor(0, 1))
-	g.SetKeybinding("", moveUpKey, gocui.ModNone, moveCursor(-1, 0))
-	g.SetKeybinding("", moveDownKey, gocui.ModNone, moveCursor(1, 0))
+	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
+	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
+	g.SetKeybinding("", moveUpKey, gocui.ModNone, moveUp)
+	g.SetKeybinding("", moveDownKey, gocui.ModNone, moveDown)
 	g.SetKeybinding("", selectKey, gocui.ModNone, selectPiece)
 	g.SetKeybinding("", dropKey, gocui.ModNone, dropPiece)
 	g.SetKeybinding("", quitKey, gocui.ModNone, quit)
 	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
 	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
+	g.SetKeybinding("", switchBoardKey, gocui.ModNone, switchBoard)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)

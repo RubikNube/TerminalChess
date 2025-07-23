@@ -18,6 +18,7 @@ The navigation is VIM based, so you can use the following keys to navigate:
 - `p` - pick a piece
 - `d` - drop a piece
 - `t` - toggle the move history
+- `b` - switch the chess board
 
 These defaults can be changed in the config.json file.
 
