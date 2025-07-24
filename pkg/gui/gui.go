@@ -99,6 +99,11 @@ func NewChessBoard() ChessBoard {
 // MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
 // Now supports castling and en passant by allowing king, rook, and pawn moves as per chess rules.
 func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) bool {
+	// Bounds check
+	if fromRow < 0 || fromRow > 7 || fromCol < 0 || fromCol > 7 ||
+		toRow < 0 || toRow > 7 || toCol < 0 || toCol > 7 {
+		return false
+	}
 	// Export current board to FEN, with correct turn
 	fen := b.ToFEN(turn)
 	chessFen, err := chess.FEN(fen)
