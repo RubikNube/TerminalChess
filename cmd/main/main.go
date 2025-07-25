@@ -10,6 +10,7 @@ import (
 	"github.com/RubikNube/TerminalChess/pkg/engine"
 	"github.com/RubikNube/TerminalChess/pkg/gui"
 	"github.com/RubikNube/TerminalChess/pkg/history"
+	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
 )
 
@@ -18,16 +19,20 @@ type Config struct {
 }
 
 var (
-	board           gui.ChessBoard
-	cursor          gui.Cursor
-	selectedRow     int
-	selectedCol     int
-	selected        bool
-	turn            gui.Color = gui.White // Track whose turn it is
-	showHistory     bool      = true      // Track if history view is shown
-	enPassantRow    int
-	enPassantCol    int // Track en passant square
-	stockfishEngine *engine.Engine
+	board            gui.ChessBoard
+	cursor           gui.Cursor
+	selectedRow      int
+	selectedCol      int
+	selected         bool
+	turn             gui.Color = gui.White // Track whose turn it is
+	showHistory      bool      = true      // Track if history view is shown
+	enPassantRow     int
+	enPassantCol     int // Track en passant square
+	stockfishEngine  *engine.Engine
+	showEngineDialog bool      = false
+	engineDepth      int       = 10
+	engineColor      gui.Color = gui.White
+	historyIndex     int       = -1 // -1 means current/latest position
 )
 
 func loadConfig(path string) (Config, error) {
@@ -60,7 +65,22 @@ func layout(g *gocui.Gui) error {
 		v.Wrap = false
 	}
 	if v, err := g.View("board"); err == nil {
-		board.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
+		// Show board at selected history index if navigating
+		if historyIndex >= 0 {
+			hist := history.GetHistory()
+			game := chess.NewGame()
+			for i := 0; i <= historyIndex && i < len(hist); i++ {
+				move, err := chess.UCINotation{}.Decode(game.Position(), hist[i])
+				if err == nil {
+					game.Move(move)
+				}
+			}
+			fen := game.Position().Board().String()
+			tmpBoard := gui.NewChessBoardFromFEN(fen)
+			tmpBoard.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
+		} else {
+			board.RenderToView(v, cursor.Row, cursor.Col, selected, selectedRow, selectedCol)
+		}
 	}
 
 	// History view on the right (only if showHistory is true)
@@ -75,8 +95,12 @@ func layout(g *gocui.Gui) error {
 		if v, err := g.View("history"); err == nil {
 			v.Clear()
 			historyLines := history.GetMoveHistorySAN()
-			for _, line := range historyLines {
-				fmt.Fprintln(v, line)
+			for i, line := range historyLines {
+				if historyIndex >= 0 && i == historyIndex/2 {
+					fmt.Fprintf(v, "> %s\n", line)
+				} else {
+					fmt.Fprintln(v, line)
+				}
 			}
 		}
 	} else {
@@ -226,6 +250,33 @@ func engineMove(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func historyPrev(g *gocui.Gui, v *gocui.View) error {
+	hist := history.GetHistory()
+	if len(hist) == 0 {
+		return nil
+	}
+	if historyIndex < 0 {
+		historyIndex = len(hist) - 1
+	} else if historyIndex > 0 {
+		historyIndex--
+	}
+	return nil
+}
+
+func historyNext(g *gocui.Gui, v *gocui.View) error {
+	hist := history.GetHistory()
+	if len(hist) == 0 {
+		return nil
+	}
+	if historyIndex >= 0 {
+		historyIndex++
+		if historyIndex >= len(hist) {
+			historyIndex = -1
+		}
+	}
+	return nil
+}
+
 func main() {
 	// Load config
 	cfg, err := loadConfig("config.json")
@@ -261,7 +312,9 @@ func main() {
 	dropKey := []rune(keybindings["drop"])[0]
 	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
 	switchBoardKey := []rune(keybindings["switchBoard"])[0]
-	engineMoveKey := 'e'
+	engineMoveKey := []rune(keybindings["engineMove"])[0]
+	forwardHistoryKey := []rune(keybindings["historyForward"])[0]
+	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
@@ -274,6 +327,8 @@ func main() {
 	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
 	g.SetKeybinding("", switchBoardKey, gocui.ModNone, switchBoard)
 	g.SetKeybinding("", engineMoveKey, gocui.ModNone, engineMove)
+	g.SetKeybinding("", backwardHistoryKey, gocui.ModNone, historyPrev)
+	g.SetKeybinding("", forwardHistoryKey, gocui.ModNone, historyNext)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)

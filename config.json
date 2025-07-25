@@ -11,6 +11,8 @@
     "reset": "r",
     "toggleHistory": "t",
     "switchBoard": "b",
-    "activateEngine": "e"
+    "engineMove": "e",
+    "historyForward": "x",
+    "historyBackward": "y"
   }
 }

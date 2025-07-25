@@ -100,6 +100,55 @@ func NewChessBoard() ChessBoard {
 	return board
 }
 
+// NewChessBoardFromFEN creates a ChessBoard from a FEN string (piece placement only).
+func NewChessBoardFromFEN(fen string) ChessBoard {
+	board := ChessBoard{}
+	rows := strings.Split(fen, "/")
+	for i := 0; i < 8 && i < len(rows); i++ {
+		row := rows[i]
+		col := 0
+		for _, c := range row {
+			if col >= 8 {
+				break
+			}
+			switch {
+			case c >= '1' && c <= '8':
+				for k := 0; k < int(c-'0'); k++ {
+					board[i][col] = Piece{Color: Undefined, Type: Empty}
+					col++
+				}
+			default:
+				var color Color
+				if c >= 'A' && c <= 'Z' {
+					color = White
+				} else {
+					color = Black
+				}
+				var typ PieceType
+				switch strings.ToLower(string(c)) {
+				case "k":
+					typ = King
+				case "q":
+					typ = Queen
+				case "r":
+					typ = Rook
+				case "b":
+					typ = Bishop
+				case "n":
+					typ = Knight
+				case "p":
+					typ = Pawn
+				default:
+					typ = Empty
+				}
+				board[i][col] = Piece{Color: color, Type: typ}
+				col++
+			}
+		}
+	}
+	return board
+}
+
 // MovePiece moves a piece from (fromRow, fromCol) to (toRow, toCol) if the move is legal.
 // Now supports castling and en passant by allowing king, rook, and pawn moves as per chess rules.
 func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) bool {

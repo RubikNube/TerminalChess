@@ -21,7 +21,8 @@ The navigation is VIM based, so you can use the following keys to navigate:
 - `t` - toggle the move history
 - `b` - switch the chess board
 - `e` - toggle the engine mode
-
+- `y` - move back in the move history
+- `x` - move forward in the move history
 These defaults can be changed in the config.json file.
 
 ## Engine
