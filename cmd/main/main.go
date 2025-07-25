@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/RubikNube/TerminalChess/pkg/engine"
 	"github.com/RubikNube/TerminalChess/pkg/gui"
 	"github.com/RubikNube/TerminalChess/pkg/history"
 	"github.com/jroimartin/gocui"
@@ -17,15 +18,16 @@ type Config struct {
 }
 
 var (
-	board        gui.ChessBoard
-	cursor       gui.Cursor
-	selectedRow  int
-	selectedCol  int
-	selected     bool
-	turn         gui.Color = gui.White // Track whose turn it is
-	showHistory  bool      = true      // Track if history view is shown
-	enPassantRow int
-	enPassantCol int // Track en passant square
+	board           gui.ChessBoard
+	cursor          gui.Cursor
+	selectedRow     int
+	selectedCol     int
+	selected        bool
+	turn            gui.Color = gui.White // Track whose turn it is
+	showHistory     bool      = true      // Track if history view is shown
+	enPassantRow    int
+	enPassantCol    int // Track en passant square
+	stockfishEngine *engine.Engine
 )
 
 func loadConfig(path string) (Config, error) {
@@ -190,6 +192,40 @@ func moveDown(g *gocui.Gui, v *gocui.View) error {
 	return moveCursor(1, 0)(g, v)
 }
 
+func engineMove(g *gocui.Gui, v *gocui.View) error {
+	if stockfishEngine == nil {
+		var err error
+		stockfishEngine, err = engine.StartStockfish()
+		if err != nil {
+			log.Println("Error: Stockfish engine not available.")
+			return nil
+		}
+	}
+	fen := board.ToFEN(turn)
+	bestMove, err := stockfishEngine.GetBestMove(fen, 10)
+	if err != nil || bestMove == "" {
+		log.Println("Error: Could not get best move from Stockfish.")
+		return nil
+	}
+	if len(bestMove) < 4 {
+		log.Println("Error: Invalid best move format.")
+		return nil
+	}
+	fromCol := int(bestMove[0] - 'a')
+	fromRow := 8 - int(bestMove[1]-'0')
+	toCol := int(bestMove[2] - 'a')
+	toRow := 8 - int(bestMove[3]-'0')
+	if board.MovePiece(fromRow, fromCol, toRow, toCol, turn) {
+		// Switch turn after a successful move
+		if turn == gui.White {
+			turn = gui.Black
+		} else {
+			turn = gui.White
+		}
+	}
+	return nil
+}
+
 func main() {
 	// Load config
 	cfg, err := loadConfig("config.json")
@@ -225,6 +261,7 @@ func main() {
 	dropKey := []rune(keybindings["drop"])[0]
 	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
 	switchBoardKey := []rune(keybindings["switchBoard"])[0]
+	engineMoveKey := 'e'
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
@@ -236,6 +273,7 @@ func main() {
 	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
 	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
 	g.SetKeybinding("", switchBoardKey, gocui.ModNone, switchBoard)
+	g.SetKeybinding("", engineMoveKey, gocui.ModNone, engineMove)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)

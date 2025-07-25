@@ -7,6 +7,7 @@ A simple chess UI in the terminal
 ## Navigation
 
 The navigation is VIM based, so you can use the following keys to navigate:
+
 - `h` - move left
 - `j` - move down
 - `k` - move up
@@ -19,9 +20,11 @@ The navigation is VIM based, so you can use the following keys to navigate:
 - `d` - drop a piece
 - `t` - toggle the move history
 - `b` - switch the chess board
+- `e` - toggle the engine mode
 
 These defaults can be changed in the config.json file.
 
 ## Engine
 
-The used default engine is Stockfish.
+The used default engine is Stockfish. It should be installed on your system in
+order to play against it.

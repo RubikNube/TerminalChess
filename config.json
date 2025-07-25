@@ -10,6 +10,7 @@
     "drop": "d",
     "reset": "r",
     "toggleHistory": "t",
-    "switchBoard": "b"
+    "switchBoard": "b",
+    "activateEngine": "e"
   }
 }
