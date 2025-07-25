@@ -14,7 +14,7 @@ The navigation is VIM based, so you can use the following keys to navigate:
 - `l` - move right
 - `q` - quit the game
 - `r` - reset the game
-- `s` - save the game
+- `s` - save the game into the `saves` directory
 - `l` - load the game
 - `p` - pick a piece
 - `d` - drop a piece

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/RubikNube/TerminalChess/pkg/engine"
 	"github.com/RubikNube/TerminalChess/pkg/gui"
@@ -33,6 +34,7 @@ var (
 	engineDepth      int       = 10
 	engineColor      gui.Color = gui.White
 	historyIndex     int       = -1 // -1 means current/latest position
+	infoMessage      string    = "" // Message to show in the info view
 )
 
 func loadConfig(path string) (Config, error) {
@@ -117,17 +119,16 @@ func layout(g *gocui.Gui) error {
 		}
 		v.Wrap = false
 	}
+
+	return nil
+}
+
+// Helper to show a message in the InfoView
+func showInfoMessage(g *gocui.Gui, msg string) {
 	if v, err := g.View("info"); err == nil {
 		v.Clear()
-		if selected {
-			colChar := 'a' + selectedCol
-			rowChar := '8' - selectedRow
-			fmt.Fprintf(v, "Selected square: %c%c\n", colChar, rowChar)
-		} else {
-			fmt.Fprint(v, "No square selected\n")
-		}
+		fmt.Fprintln(v, msg)
 	}
-	return nil
 }
 
 func moveCursor(dRow, dCol int) func(*gocui.Gui, *gocui.View) error {
@@ -277,6 +278,42 @@ func historyNext(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Save the current game as a PGN file in the "saves" directory and show notification in InfoView
+func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
+	saveDir := "saves"
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		showInfoMessage(g, fmt.Sprintf("Error creating saves directory: %v", err))
+		return nil
+	}
+	timestamp := time.Now().Format("2006-01-02-15-04-05")
+	filename := fmt.Sprintf("chess_%s.pgn", timestamp)
+	filepath := filepath.Join(saveDir, filename)
+
+	hist := history.GetHistory()
+	game := chess.NewGame()
+	for _, moveStr := range hist {
+		move, err := chess.UCINotation{}.Decode(game.Position(), moveStr)
+		if err == nil {
+			game.Move(move)
+		}
+	}
+	pgn := game.String()
+
+	f, err := os.Create(filepath)
+	if err != nil {
+		showInfoMessage(g, fmt.Sprintf("Error creating PGN file: %v", err))
+		return nil
+	}
+	defer f.Close()
+	if _, err := f.WriteString(pgn); err != nil {
+		showInfoMessage(g, fmt.Sprintf("Error writing PGN: %v", err))
+		return nil
+	}
+	notification := fmt.Sprintf("Game saved to saves/%s", filename)
+	showInfoMessage(g, notification)
+	return nil
+}
+
 func main() {
 	// Load config
 	cfg, err := loadConfig("config.json")
@@ -315,6 +352,7 @@ func main() {
 	engineMoveKey := []rune(keybindings["engineMove"])[0]
 	forwardHistoryKey := []rune(keybindings["historyForward"])[0]
 	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
+	saveGameKey := []rune(keybindings["saveGame"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
@@ -329,6 +367,7 @@ func main() {
 	g.SetKeybinding("", engineMoveKey, gocui.ModNone, engineMove)
 	g.SetKeybinding("", backwardHistoryKey, gocui.ModNone, historyPrev)
 	g.SetKeybinding("", forwardHistoryKey, gocui.ModNone, historyNext)
+	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)

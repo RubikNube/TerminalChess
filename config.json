@@ -5,7 +5,7 @@
     "moveUp": "k",
     "moveDown": "j",
     "quit": "q",
-    "save": "w",
+    "saveGame": "w",
     "pick": "p",
     "drop": "d",
     "reset": "r",

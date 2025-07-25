@@ -18,8 +18,8 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# saved games directory
+saves/
 
 # Go workspace file
 go.work
