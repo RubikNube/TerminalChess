@@ -41,6 +41,50 @@ func TestMovePiece_InvalidMove(t *testing.T) {
 	}
 }
 
+func TestMovePiece_EnPassant(t *testing.T) {
+	board := NewChessBoard()
+	// White pawn double move e2 to e4
+	board.MovePiece(6, 4, 4, 4, White)
+	println("After white pawn move e2 to e4:")
+	PrintBoard(board) // Print board for debugging
+	// Black pawn single pawn move e7 to e6
+	board.MovePiece(1, 4, 2, 4, Black)
+	println("After black pawn move e7 to e6:")
+	PrintBoard(board) // Print board for debugging
+	// White pawn double move e4 to e5
+	board.MovePiece(4, 4, 3, 4, White)
+	println("After white pawn move e4 to e5:")
+	PrintBoard(board) // Print board for debugging
+	// Black pawn double move d7 to d5
+	board.MovePiece(1, 3, 3, 3, Black)
+	println("After black pawn move d7 to d5:")
+	PrintBoard(board) // Print board for debugging
+
+	// verify that en passant square is set correctly
+	row, col := GetEnPassantSquare()
+	if row != 2 || col != 3 {
+		t.Errorf("Expected en passant square at (2,3), got (%d,%d)", row, col)
+	}
+
+	// Now perform en passant capture
+	ok := board.MovePiece(3, 4, 2, 3, White) // e5 to d6
+
+	println("After white pawn en passant capture at d6:")
+	PrintBoard(board) // Print board for debugging
+	if !ok {
+		t.Error("Expected valid en passant capture")
+	}
+	if board[2][3].Type != Pawn || board[2][3].Color != White {
+		t.Error("Expected WhitePawn at d6 after en passant")
+	}
+	if board[5][4].Type != Empty {
+		t.Error("Expected e4 to be empty after en passant")
+	}
+	if board[3][3].Type != Empty {
+		t.Error("Expected d5 to be empty after en passant")
+	}
+}
+
 // Dummy implementation for keybindings defaults for testing
 func GetKeybindingsDefaults() map[string]string {
 	return map[string]string{
@@ -61,6 +105,48 @@ func TestKeybindings_Defaults(t *testing.T) {
 	kb := GetKeybindingsDefaults()
 	if kb["moveLeft"] == "" || kb["moveRight"] == "" {
 		t.Error("Expected default keybindings to be set")
+	}
+}
+
+func TestGetEnPassantSquare_DoublePawnMove(t *testing.T) {
+	board := NewChessBoard()
+	// White pawn double move e2 to e4
+	board.MovePiece(6, 4, 4, 4, White)
+	row, col := GetEnPassantSquare()
+	if row != 5 || col != 4 {
+		t.Errorf("Expected en passant square at (5,4), got (%d,%d)", row, col)
+	}
+
+	// Black pawn double move d7 to d5
+	board.MovePiece(1, 3, 3, 3, Black)
+	row, col = GetEnPassantSquare()
+	if row != 2 || col != 3 {
+		t.Errorf("Expected en passant square at (2,3), got (%d,%d)", row, col)
+	}
+}
+
+func TestGetEnPassantSquare_NotDoublePawnMove(t *testing.T) {
+	board := NewChessBoard()
+	// White pawn single move e2 to e3
+	board.MovePiece(6, 4, 5, 4, White)
+	row, col := GetEnPassantSquare()
+	if row != -1 || col != -1 {
+		t.Errorf("Expected en passant square to be (-1,-1), got (%d,%d)", row, col)
+	}
+
+	// Move knight, should not set en passant
+	board.MovePiece(7, 6, 5, 5, White)
+	row, col = GetEnPassantSquare()
+	if row != -1 || col != -1 {
+		t.Errorf("Expected en passant square to be (-1,-1), got (%d,%d)", row, col)
+	}
+}
+
+func TestGetEnPassantSquare_ErrorHandling(t *testing.T) {
+	// Directly test initial state
+	row, col := GetEnPassantSquare()
+	if row != -1 || col != -1 {
+		t.Errorf("Expected initial en passant square to be (-1,-1), got (%d,%d)", row, col)
 	}
 }
 

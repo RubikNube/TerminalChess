@@ -58,6 +58,10 @@ type ChessBoard [8][8]Piece
 var asciiPieces = map[PieceType]map[Color][]string{}
 var BoardFlipped bool = false
 
+// Set the en passant square if the last move was a double pawn move
+var enPassantRow int = -1
+var enPassantCol int = -1
+
 // NewChessBoard initializes a chess board with the standard starting position.
 func NewChessBoard() ChessBoard {
 	board := ChessBoard{}
@@ -139,16 +143,34 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 			if castleMove != nil && game.Move(castleMove) == nil {
 				updateBoardFromGame(b, game)
 				history.AddMove(castleMove.String())
+				setEnPassantSquare(piece, fromRow, fromCol, toRow, toCol)
 				return true
 			}
 		}
-		// Try en passant if pawn moves diagonally to an empty square
+		// Try en passant if pawn moves diagonally to an empty square and en passant is available
 		if piece.Type == Pawn && fromRow != toRow && fromCol != toCol && b[toRow][toCol].Type == Empty {
-			// En passant move string is the same as normal pawn capture
+			epRow, epCol := GetEnPassantSquare()
+			if toRow == epRow && toCol == epCol {
+				// Perform en passant capture
+				updateBoardFromGame(b, game)
+				// Remove the captured pawn
+				if piece.Color == White {
+					b[toRow+1][toCol] = Piece{Type: Empty, Color: Undefined}
+				} else {
+					b[toRow-1][toCol] = Piece{Type: Empty, Color: Undefined}
+				}
+				moveStr := move.String()
+				moveStr += " e.p."
+				history.AddMove(moveStr)
+				setEnPassantSquare(piece, fromRow, fromCol, toRow, toCol)
+				return true
+			}
+			// fallback: try normal pawn capture (should fail if not en passant)
 			move, err = chess.UCINotation{}.Decode(game.Position(), moveStr)
 			if err == nil && game.Move(move) == nil {
 				updateBoardFromGame(b, game)
 				history.AddMove(move.String())
+				setEnPassantSquare(piece, fromRow, fromCol, toRow, toCol)
 				return true
 			}
 		}
@@ -160,7 +182,30 @@ func (b *ChessBoard) MovePiece(fromRow, fromCol, toRow, toCol int, turn Color) b
 
 	updateBoardFromGame(b, game)
 	history.AddMove(move.String())
+	setEnPassantSquare(piece, fromRow, fromCol, toRow, toCol)
 	return true
+}
+
+func setEnPassantSquare(piece Piece, fromRow, fromCol, toRow, toCol int) {
+	// Only pawns moving two squares forward
+	if piece.Type == Pawn && abs(fromRow-toRow) == 2 && fromCol == toCol {
+		// Set en passant square to the square behind the moved pawn
+		if piece.Color == White {
+			enPassantRow = toRow + 1
+			enPassantCol = toCol
+		} else if piece.Color == Black {
+			enPassantRow = toRow - 1
+			enPassantCol = toCol
+		}
+	} else {
+		enPassantRow = -1
+		enPassantCol = -1
+	}
+}
+
+func GetEnPassantSquare() (int, int) {
+	// Return the current en passant square
+	return enPassantRow, enPassantCol
 }
 
 // updateBoardFromGame updates the ChessBoard from the chess.Game position.
@@ -377,8 +422,13 @@ func (b ChessBoard) ToFEN(turn Color) string {
 	if castle == "" {
 		castle = "-"
 	}
-	// No en passant, fullmove 1, halfmove 0
-	return fen + " " + turnStr + " " + castle + " - 0 1"
+	// Set en passant square if available
+	ep := "-"
+	if enPassantRow >= 0 && enPassantCol >= 0 && enPassantRow < 8 && enPassantCol < 8 {
+		ep = fmt.Sprintf("%c%d", 'a'+enPassantCol, 8-enPassantRow)
+	}
+	// fullmove 1, halfmove 0
+	return fen + " " + turnStr + " " + castle + " " + ep + " 0 1"
 }
 
 func LoadAsciiPieces(pieceFolder string) error {
@@ -444,4 +494,43 @@ func readAsciiArtFile(path string) ([]string, error) {
 // ToggleBoardOrientation toggles the board orientation (flipped/unflipped).
 func ToggleBoardOrientation() {
 	BoardFlipped = !BoardFlipped
+}
+
+func PrintBoard(b ChessBoard) {
+	// Unicode chess symbols (same for both colors)
+	pieceSymbols := map[PieceType]string{
+		King:   "♚",
+		Queen:  "♛",
+		Rook:   "♜",
+		Bishop: "♝",
+		Knight: "♞",
+		Pawn:   "♟",
+		Empty:  ".",
+	}
+
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 8; j++ {
+			piece := b[i][j]
+			// Determine ANSI background color
+			bgColor := "\033[47m" // White
+			if (i+j)%2 == 1 {
+				bgColor = "\033[100m" // Gray for black square
+			}
+			// Determine piece color
+			fgColor := ""
+			switch piece.Color {
+			case White:
+				fgColor = "\033[93m"
+			case Black:
+				fgColor = "\033[94m"
+			default:
+				fgColor = "\033[90m" // Gray for undefined/empty
+			}
+			reset := "\033[0m"
+			pieceChar := pieceSymbols[piece.Type]
+			fmt.Printf("%s%s %s%s", bgColor, fgColor, pieceChar, reset)
+		}
+		fmt.Println()
+	}
+	println("")
 }

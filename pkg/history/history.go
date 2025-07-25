@@ -201,6 +201,10 @@ func GetMoveHistorySAN() []string {
 			move, err := chess.UCINotation{}.Decode(game.Position(), rawMoves[i])
 			if err == nil {
 				whiteSAN = chess.AlgebraicNotation{}.Encode(game.Position(), move)
+				// Annotate with e.p. for en passant
+				if move.HasTag(chess.EnPassant) {
+					whiteSAN += " e.p."
+				}
 				game.Move(move)
 				// Annotate with # for checkmate, + for check
 				if game.Outcome() != chess.NoOutcome && game.Method() == chess.Checkmate {
@@ -218,6 +222,10 @@ func GetMoveHistorySAN() []string {
 			move, err := chess.UCINotation{}.Decode(game.Position(), rawMoves[i+1])
 			if err == nil {
 				blackSAN = chess.AlgebraicNotation{}.Encode(game.Position(), move)
+				// Annotate with e.p. for en passant
+				if move.HasTag(chess.EnPassant) {
+					blackSAN += " e.p."
+				}
 				game.Move(move)
 				// Annotate with # for checkmate, + for check
 				if game.Outcome() != chess.NoOutcome && game.Method() == chess.Checkmate {

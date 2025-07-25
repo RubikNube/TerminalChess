@@ -17,13 +17,15 @@ type Config struct {
 }
 
 var (
-	board       gui.ChessBoard
-	cursor      gui.Cursor
-	selectedRow int
-	selectedCol int
-	selected    bool
-	turn        gui.Color = gui.White // Track whose turn it is
-	showHistory bool      = true      // Track if history view is shown
+	board        gui.ChessBoard
+	cursor       gui.Cursor
+	selectedRow  int
+	selectedCol  int
+	selected     bool
+	turn         gui.Color = gui.White // Track whose turn it is
+	showHistory  bool      = true      // Track if history view is shown
+	enPassantRow int
+	enPassantCol int // Track en passant square
 )
 
 func loadConfig(path string) (Config, error) {
