@@ -218,16 +218,8 @@ func moveDown(g *gocui.Gui, v *gocui.View) error {
 }
 
 func engineMove(g *gocui.Gui, v *gocui.View) error {
-	if stockfishEngine == nil {
-		var err error
-		stockfishEngine, err = engine.StartStockfish()
-		if err != nil {
-			log.Println("Error: Stockfish engine not available.")
-			return nil
-		}
-	}
 	fen := board.ToFEN(turn)
-	bestMove, err := stockfishEngine.GetBestMove(fen, 10)
+	bestMove, err := engine.GetBestMove(fen, 10)
 	if err != nil || bestMove == "" {
 		log.Println("Error: Could not get best move from Stockfish.")
 		return nil
@@ -336,7 +328,16 @@ func main() {
 	board = gui.NewChessBoard()
 	cursor = gui.Cursor{Row: 6, Col: 4}
 
+	// Initialize Stockfish engine with options from engine.json
+
+	if err != nil {
+		log.Println("Warning: Failed to initialize Stockfish with options:", err)
+		stockfishEngine = nil
+	}
+
 	g.SetManagerFunc(layout)
+
+	engine.Initialize("engine.json")
 
 	// Keybindings for movement
 	moveLeftKey := []rune(keybindings["moveLeft"])[0]

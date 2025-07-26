@@ -1,0 +1,27 @@
+{
+  "name": "stockfish",
+  "automove": true,
+  "engineColor": "black",
+  "path": "/usr/bin/stockfish",
+  "options": {
+    "Debug Log File": "",
+    "NumaPolicy": "auto",
+    "Threads": 4,
+    "Hash": 16,
+    "Clear Hash": false,
+    "Ponder": false,
+    "MultiPV": 1,
+    "Move Overhead": 10,
+    "nodestime": 0,
+    "UCI_Chess960": false,
+    "UCI_LimitStrength": false,
+    "UCI_Elo": 1900,
+    "UCI_ShowWDL": false,
+    "SyzygyPath": "",
+    "SyzygyProbeDepth": 1,
+    "Syzygy50MoveRule": true,
+    "SyzygyProbeLimit": 7,
+    "EvalFile": "nn-1c0000000000.nnue",
+    "EvalFileSmall": "nn-37f18f62d772.nnue"
+  }
+}

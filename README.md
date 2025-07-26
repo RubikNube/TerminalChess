@@ -28,3 +28,7 @@ These defaults can be changed in the config.json file.
 
 The used default engine is Stockfish. It should be installed on your system in
 order to play against it.
+
+The settings for the engine can be changed in the `engine.json` file. If your
+Stockfish binary is not in the default path (`/usr/bin/stockfish`), you can
+change the path in the `engine.json` file.
