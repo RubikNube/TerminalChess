@@ -28,9 +28,9 @@ type Engine struct {
 }
 
 var (
-	configFilePath = "engine.json" // Default path for engine configuration file
-	engineConfig   EngineConfig
-	loadedEngine   *Engine // Singleton instance of the engine
+	configFilePath     = "engine.json" // Default path for engine configuration file
+	LoadedEngineConfig EngineConfig
+	loadedEngine       *Engine // Singleton instance of the engine
 )
 
 func Initialize(engineConfigPath string) error {
@@ -39,7 +39,7 @@ func Initialize(engineConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load engine config: %w", err)
 	}
-	engineConfig = cfg
+	LoadedEngineConfig = cfg
 
 	startStockfishWithOptions(cfg.Path, cfg.Options)
 

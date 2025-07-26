@@ -28,13 +28,10 @@ var (
 	turn             gui.Color = gui.White // Track whose turn it is
 	showHistory      bool      = true      // Track if history view is shown
 	enPassantRow     int
-	enPassantCol     int // Track en passant square
-	stockfishEngine  *engine.Engine
-	showEngineDialog bool      = false
-	engineDepth      int       = 10
-	engineColor      gui.Color = gui.White
-	historyIndex     int       = -1 // -1 means current/latest position
-	infoMessage      string    = "" // Message to show in the info view
+	enPassantCol     int    // Track en passant square
+	showEngineDialog bool   = false
+	historyIndex     int    = -1 // -1 means current/latest position
+	infoMessage      string = "" // Message to show in the info view
 )
 
 func loadConfig(path string) (Config, error) {
@@ -151,11 +148,14 @@ func dropPiece(g *gocui.Gui, v *gocui.View) error {
 	if selected {
 		if board.MovePiece(selectedRow, selectedCol, cursor.Row, cursor.Col, turn) {
 			selected = false
-			// Switch turn after a successful move
 			if turn == gui.White {
 				turn = gui.Black
 			} else {
 				turn = gui.White
+			}
+			// If automove is enabled and it's now the engine's turn, trigger engine move
+			if engine.LoadedEngineConfig.Automove && ((engine.LoadedEngineConfig.EngineColor == "white" && turn == gui.White) || (engine.LoadedEngineConfig.EngineColor == "black" && turn == gui.Black)) {
+				engineMove(g, v)
 			}
 		}
 	}
@@ -327,13 +327,6 @@ func main() {
 	}
 	board = gui.NewChessBoard()
 	cursor = gui.Cursor{Row: 6, Col: 4}
-
-	// Initialize Stockfish engine with options from engine.json
-
-	if err != nil {
-		log.Println("Warning: Failed to initialize Stockfish with options:", err)
-		stockfishEngine = nil
-	}
 
 	g.SetManagerFunc(layout)
 
