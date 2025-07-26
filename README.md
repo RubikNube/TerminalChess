@@ -6,7 +6,7 @@ A simple chess UI in the terminal
 
 ## Navigation
 
-The navigation is VIM based, so you can use the following keys to navigate:
+The navigation is Vim based, so you can use the following keys to navigate:
 
 - `h` - move left
 - `j` - move down
@@ -14,8 +14,7 @@ The navigation is VIM based, so you can use the following keys to navigate:
 - `l` - move right
 - `q` - quit the game
 - `r` - reset the game
-- `s` - save the game into the `saves` directory
-- `l` - load the game
+- `w` - save the game into the `saves` directory
 - `p` - pick a piece
 - `d` - drop a piece
 - `t` - toggle the move history
