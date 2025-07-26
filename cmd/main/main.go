@@ -289,7 +289,22 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 			game.Move(move)
 		}
 	}
-	pgn := game.String()
+
+	playerName := os.Getenv("USER")
+	if playerName == "" {
+		playerName = "Player"
+	}
+	date := time.Now().Format("2006.01.02")
+
+	elo := 0
+	if eloOpt, ok := engine.LoadedEngineConfig.Options["UCI_Elo"]; ok {
+		switch v := eloOpt.(type) {
+		case float64:
+			elo = int(v)
+		case int:
+			elo = v
+		}
+	}
 
 	f, err := os.Create(filepath)
 	if err != nil {
@@ -297,10 +312,24 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 	defer f.Close()
-	if _, err := f.WriteString(pgn); err != nil {
-		showInfoMessage(g, fmt.Sprintf("Error writing PGN: %v", err))
-		return nil
+
+	fmt.Fprintf(f, "[Event \"Casual Game\"]\n")
+	fmt.Fprintf(f, "[Date \"%s\"]\n", date)
+	// determine if the engine is playing white or black
+	if engine.LoadedEngineConfig.EngineColor == "white" {
+		fmt.Fprintf(f, "[White \"%s (Elo: %d)\"]\n", engine.LoadedEngineConfig.Name, elo)
+		fmt.Fprintf(f, "[Black \"%s\"]\n", playerName)
+	} else {
+		fmt.Fprintf(f, "[White \"%s\"]\n", playerName)
+		fmt.Fprintf(f, "[Black \"%s (Elo: %d)\"]\n", engine.LoadedEngineConfig.Name, elo)
 	}
+	fmt.Fprintf(f, "\n")
+
+	line := game.String()
+	if line != "" {
+		fmt.Fprintln(f, line)
+	}
+
 	notification := fmt.Sprintf("Game saved to saves/%s", filename)
 	showInfoMessage(g, notification)
 	return nil
