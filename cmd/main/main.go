@@ -22,8 +22,8 @@ type Config struct {
 var (
 	board            gui.ChessBoard
 	cursor           gui.Cursor
-	selectedRow      int
-	selectedCol      int
+	selectedRow      int = -1
+	selectedCol      int = -1
 	selected         bool
 	turn             gui.Color = gui.White // Track whose turn it is
 	showHistory      bool      = true      // Track if history view is shown
@@ -145,7 +145,7 @@ func selectPiece(g *gocui.Gui, v *gocui.View) error {
 }
 
 func dropPiece(g *gocui.Gui, v *gocui.View) error {
-	if selected {
+	if selected && selectedRow >= 0 && selectedCol >= 0 {
 		if board.MovePiece(selectedRow, selectedCol, cursor.Row, cursor.Col, turn) {
 			selected = false
 			if turn == gui.White {
@@ -182,6 +182,13 @@ func toggleHistory(g *gocui.Gui, v *gocui.View) error {
 
 func switchBoard(g *gocui.Gui, v *gocui.View) error {
 	gui.ToggleBoardOrientation()
+	return nil
+}
+
+func clearSelection(g *gocui.Gui, v *gocui.View) error {
+	selected = false
+	selectedRow = -1
+	selectedCol = -1
 	return nil
 }
 
@@ -367,6 +374,7 @@ func main() {
 	moveUpKey := []rune(keybindings["moveUp"])[0]
 	moveDownKey := []rune(keybindings["moveDown"])[0]
 	selectKey := []rune(keybindings["pick"])[0]
+	clearSelectionKey := []rune(keybindings["clearSelection"])[0]
 	quitKey := []rune(keybindings["quit"])[0]
 	resetKey := []rune(keybindings["reset"])[0]
 	dropKey := []rune(keybindings["drop"])[0]
@@ -391,6 +399,7 @@ func main() {
 	g.SetKeybinding("", backwardHistoryKey, gocui.ModNone, historyPrev)
 	g.SetKeybinding("", forwardHistoryKey, gocui.ModNone, historyNext)
 	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
+	g.SetKeybinding("", clearSelectionKey, gocui.ModNone, clearSelection)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)

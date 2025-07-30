@@ -16,6 +16,7 @@ The navigation is Vim based, so you can use the following keys to navigate:
 - `r` - reset the game
 - `w` - save the game into the `saves` directory
 - `p` - pick a piece
+- `c` - clears the current selection
 - `d` - drop a piece
 - `t` - toggle the move history
 - `b` - switch the chess board

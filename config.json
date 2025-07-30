@@ -8,6 +8,7 @@
     "saveGame": "w",
     "pick": "p",
     "drop": "d",
+    "clearSelection": "c",
     "reset": "r",
     "toggleHistory": "t",
     "switchBoard": "b",
