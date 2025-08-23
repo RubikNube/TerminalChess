@@ -6,6 +6,7 @@
     "moveDown": "j",
     "quit": "q",
     "saveGame": "w",
+    "loadGame": "a",
     "pick": "p",
     "drop": "d",
     "clearSelection": "c",

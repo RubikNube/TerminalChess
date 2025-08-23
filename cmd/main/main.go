@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/RubikNube/TerminalChess/pkg/engine"
@@ -20,18 +22,25 @@ type Config struct {
 }
 
 var (
-	board            gui.ChessBoard
-	cursor           gui.Cursor
-	selectedRow      int = -1
-	selectedCol      int = -1
-	selected         bool
-	turn             gui.Color = gui.White // Track whose turn it is
-	showHistory      bool      = true      // Track if history view is shown
-	enPassantRow     int
-	enPassantCol     int    // Track en passant square
-	showEngineDialog bool   = false
-	historyIndex     int    = -1 // -1 means current/latest position
-	infoMessage      string = "" // Message to show in the info view
+	board             gui.ChessBoard
+	cursor            gui.Cursor
+	selectedRow       int = -1
+	selectedCol       int = -1
+	selected          bool
+	turn              gui.Color = gui.White // Track whose turn it is
+	showHistory       bool      = true      // Track if history view is shown
+	enPassantRow      int
+	enPassantCol      int    // Track en passant square
+	showEngineDialog  bool   = false
+	showLoadDialog    bool   = false
+	historyIndex      int    = -1 // -1 means current/latest position
+	infoMessage       string = "" // Message to show in the info view
+	cfg               Config
+	defaultLoadPrompt = "Enter path to PGN file:"
+
+	cyclePrefix  string
+	cycleIndex   int
+	cycleMatches []string
 )
 
 func loadConfig(path string) (Config, error) {
@@ -48,6 +57,32 @@ func loadConfig(path string) (Config, error) {
 func layout(g *gocui.Gui) error {
 	_, maxY := g.Size()
 	historyWidth := 20
+
+	// Render load dialog if needed
+	if showLoadDialog {
+		loadWidth := 40
+		loadHeight := 5
+		x := 5
+		y := 3
+		if v, err := g.SetView("load", x, y, x+loadWidth, y+loadHeight); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.Title = "Load Game"
+			v.Wrap = true
+			v.Editable = true
+			v.Clear()
+			fmt.Fprintln(v, "Enter path to PGN file:")
+			g.SetCurrentView("load")
+			g.Cursor = true
+			v.Editor = &loadEditor{defaultPrompt: defaultLoadPrompt}
+		}
+	} else {
+		// Remove load dialog if it exists
+		if _, err := g.View("load"); err == nil {
+			g.DeleteView("load")
+		}
+	}
 
 	// Calculate the exact width needed for the chessboard view
 	artWidth := 7
@@ -183,6 +218,12 @@ func toggleHistory(g *gocui.Gui, v *gocui.View) error {
 func switchBoard(g *gocui.Gui, v *gocui.View) error {
 	gui.ToggleBoardOrientation()
 	return nil
+}
+
+func openLoadDialog(g *gocui.Gui, v *gocui.View) error {
+	showLoadDialog = true
+	enableLoadDialogKeybindings(g)
+	return layout(g)
 }
 
 func clearSelection(g *gocui.Gui, v *gocui.View) error {
@@ -342,9 +383,202 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	lines := strings.Split(buf, "\n")
+	if len(lines) < 2 {
+		showInfoMessage(g, "Please enter a valid path.")
+		return nil
+	}
+	path := strings.TrimSpace(lines[1])
+	f, err := os.Open(path)
+	if err != nil {
+		showInfoMessage(g, fmt.Sprintf("Failed to open file: %v", err))
+		return nil
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		showInfoMessage(g, fmt.Sprintf("Failed to read file: %v", err))
+		return nil
+	}
+	gameFunc, err := chess.PGN(strings.NewReader(string(data)))
+	if err != nil {
+		showInfoMessage(g, "Invalid PGN file.")
+		return nil
+	}
+	game := chess.NewGame()
+	gameFunc(game)
+	parsedGame := game
+	if parsedGame == nil {
+		showInfoMessage(g, "Invalid PGN file.")
+		return nil
+	}
+	history.ClearHistory()
+	for _, move := range parsedGame.Moves() {
+		history.AddMove(chess.UCINotation{}.Encode(parsedGame.Position(), move))
+	}
+	board = gui.NewChessBoardFromFEN(parsedGame.FEN())
+	showLoadDialog = false
+	g.DeleteView("load")
+	g.SetCurrentView("board")
+	showInfoMessage(g, fmt.Sprintf("Loaded game from %s", path))
+	return layout(g)
+}
+
+// Autocomplete file path in load dialog when Tab is pressed
+func autocompleteFilePath(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	input := strings.TrimSpace(buf)
+	dir, filePrefix := filepath.Split(input)
+	if dir == "" {
+		dir = "."
+	}
+
+	// Only recalculate matches if prefix changed or no matches cached
+	if filePrefix != cyclePrefix || cycleMatches == nil {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil
+		}
+		var matches []string
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, filePrefix) {
+				matches = append(matches, name)
+			}
+		}
+		cyclePrefix = filePrefix
+		cycleMatches = matches
+		cycleIndex = 0
+	}
+
+	if len(cycleMatches) == 1 {
+		// Single match, autocomplete directly
+		input = filepath.Join(dir, cycleMatches[0])
+		cycleMatches = nil
+		cycleIndex = 0
+	} else if len(cycleMatches) > 1 {
+		// Cycle through cached matches only, do not recalculate
+		input = filepath.Join(dir, cycleMatches[cycleIndex])
+		showInfoMessage(g, "Matches: "+strings.Join(cycleMatches, " "))
+		cycleIndex = (cycleIndex + 1) % len(cycleMatches)
+	} else {
+		cycleMatches = nil
+		cycleIndex = 0
+	}
+
+	v.Clear()
+	fmt.Fprint(v, input)
+	return nil
+}
+
+func enableGlobalKeybindings(g *gocui.Gui, keybindings map[string]string) {
+	g.DeleteKeybindings("")
+	g.DeleteKeybindings("load")
+	moveLeftKey := []rune(keybindings["moveLeft"])[0]
+	moveRightKey := []rune(keybindings["moveRight"])[0]
+	moveUpKey := []rune(keybindings["moveUp"])[0]
+	moveDownKey := []rune(keybindings["moveDown"])[0]
+	selectKey := []rune(keybindings["pick"])[0]
+	clearSelectionKey := []rune(keybindings["clearSelection"])[0]
+	quitKey := []rune(keybindings["quit"])[0]
+	resetKey := []rune(keybindings["reset"])[0]
+	dropKey := []rune(keybindings["drop"])[0]
+	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
+	switchBoardKey := []rune(keybindings["switchBoard"])[0]
+	engineMoveKey := []rune(keybindings["engineMove"])[0]
+	forwardHistoryKey := []rune(keybindings["historyForward"])[0]
+	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
+	saveGameKey := []rune(keybindings["saveGame"])[0]
+	loadGameKey := []rune(keybindings["loadGame"])[0]
+
+	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
+	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
+	g.SetKeybinding("", moveUpKey, gocui.ModNone, moveUp)
+	g.SetKeybinding("", moveDownKey, gocui.ModNone, moveDown)
+	g.SetKeybinding("", selectKey, gocui.ModNone, selectPiece)
+	g.SetKeybinding("", dropKey, gocui.ModNone, dropPiece)
+	g.SetKeybinding("", quitKey, gocui.ModNone, quit)
+	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
+	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
+	g.SetKeybinding("", switchBoardKey, gocui.ModNone, switchBoard)
+	g.SetKeybinding("", engineMoveKey, gocui.ModNone, engineMove)
+	g.SetKeybinding("", backwardHistoryKey, gocui.ModNone, historyPrev)
+	g.SetKeybinding("", forwardHistoryKey, gocui.ModNone, historyNext)
+	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
+	g.SetKeybinding("", clearSelectionKey, gocui.ModNone, clearSelection)
+	g.SetKeybinding("", loadGameKey, gocui.ModNone, openLoadDialog)
+}
+
+func enableLoadDialogKeybindings(g *gocui.Gui) {
+	g.DeleteKeybindings("")
+	g.DeleteKeybindings("load")
+	g.SetKeybinding("load", gocui.KeyEnter, gocui.ModNone, handleLoadGame)
+	g.SetKeybinding("load", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		showLoadDialog = false
+		enableGlobalKeybindings(g, cfg.Keybindings)
+		g.DeleteView("load")
+		g.SetCurrentView("board")
+		return layout(g)
+	})
+	g.SetKeybinding("load", gocui.KeyCtrlQ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		showLoadDialog = false
+		enableGlobalKeybindings(g, cfg.Keybindings)
+		g.DeleteView("load")
+		g.SetCurrentView("board")
+		return layout(g)
+	})
+	g.SetKeybinding("load", gocui.KeyTab, gocui.ModNone, autocompleteFilePath)
+	// Remove default prompt when user types any character
+	g.SetKeybinding("load", 0, gocui.ModNone, clearLoadPromptOnRune)
+}
+
+func clearLoadPromptOnRune(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	lines := strings.Split(buf, "\n")
+	// If the prompt is present, clear it and leave only an empty input line
+	if len(lines) > 0 && strings.Contains(lines[0], defaultLoadPrompt) {
+		v.Clear()
+		fmt.Fprintln(v, "")
+	}
+	return nil
+}
+
+type loadEditor struct {
+	defaultPrompt string
+	cleared       bool
+}
+
+func (e *loadEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
+	if !e.cleared {
+		buf := v.Buffer()
+		lines := strings.Split(buf, "\n")
+		if len(lines) > 0 && strings.Contains(lines[0], e.defaultPrompt) {
+			v.Clear()
+			e.cleared = true
+		}
+	}
+	gocui.DefaultEditor.Edit(v, key, ch, mod)
+}
+
+func clearLoadPromptOnInput(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	lines := strings.Split(buf, "\n")
+	if len(lines) > 0 && strings.Contains(lines[0], defaultLoadPrompt) {
+		v.Clear()
+		fmt.Fprintln(v, "")
+		if len(lines) > 1 {
+			fmt.Fprintln(v, lines[1])
+		}
+	}
+	return nil
+}
+
 func main() {
 	// Load config
-	cfg, err := loadConfig("config.json")
+	var err error
+	cfg, err = loadConfig("config.json")
 	if err != nil {
 		log.Panicln("Failed to load config:", err)
 	}
@@ -368,38 +602,7 @@ func main() {
 
 	engine.Initialize("engine.json")
 
-	// Keybindings for movement
-	moveLeftKey := []rune(keybindings["moveLeft"])[0]
-	moveRightKey := []rune(keybindings["moveRight"])[0]
-	moveUpKey := []rune(keybindings["moveUp"])[0]
-	moveDownKey := []rune(keybindings["moveDown"])[0]
-	selectKey := []rune(keybindings["pick"])[0]
-	clearSelectionKey := []rune(keybindings["clearSelection"])[0]
-	quitKey := []rune(keybindings["quit"])[0]
-	resetKey := []rune(keybindings["reset"])[0]
-	dropKey := []rune(keybindings["drop"])[0]
-	toggleHistoryKey := []rune(keybindings["toggleHistory"])[0]
-	switchBoardKey := []rune(keybindings["switchBoard"])[0]
-	engineMoveKey := []rune(keybindings["engineMove"])[0]
-	forwardHistoryKey := []rune(keybindings["historyForward"])[0]
-	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
-	saveGameKey := []rune(keybindings["saveGame"])[0]
-
-	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
-	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
-	g.SetKeybinding("", moveUpKey, gocui.ModNone, moveUp)
-	g.SetKeybinding("", moveDownKey, gocui.ModNone, moveDown)
-	g.SetKeybinding("", selectKey, gocui.ModNone, selectPiece)
-	g.SetKeybinding("", dropKey, gocui.ModNone, dropPiece)
-	g.SetKeybinding("", quitKey, gocui.ModNone, quit)
-	g.SetKeybinding("", resetKey, gocui.ModNone, reset)
-	g.SetKeybinding("", toggleHistoryKey, gocui.ModNone, toggleHistory)
-	g.SetKeybinding("", switchBoardKey, gocui.ModNone, switchBoard)
-	g.SetKeybinding("", engineMoveKey, gocui.ModNone, engineMove)
-	g.SetKeybinding("", backwardHistoryKey, gocui.ModNone, historyPrev)
-	g.SetKeybinding("", forwardHistoryKey, gocui.ModNone, historyNext)
-	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
-	g.SetKeybinding("", clearSelectionKey, gocui.ModNone, clearSelection)
+	enableGlobalKeybindings(g, keybindings)
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
