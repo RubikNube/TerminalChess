@@ -474,6 +474,38 @@ func autocompleteFilePath(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Cycle backwards through suggestions when Shift+Tab is pressed
+func autocompleteFilePathBackward(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	input := strings.TrimSpace(buf)
+	dir, _ := filepath.Split(input)
+	if dir == "" {
+		dir = "."
+	}
+
+	if len(cycleMatches) == 0 {
+		updateFilePathSuggestions(g, v)
+	}
+
+	if len(cycleMatches) == 1 {
+		input = filepath.Join(dir, cycleMatches[0])
+		cycleMatches = nil
+		cycleIndex = 0
+	} else if len(cycleMatches) > 1 {
+		input = filepath.Join(dir, cycleMatches[cycleIndex])
+		showInfoMessage(g, "Matches: "+strings.Join(cycleMatches, " "))
+		cycleIndex = (cycleIndex - 1 + len(cycleMatches)) % len(cycleMatches)
+	} else {
+		cycleMatches = nil
+		cycleIndex = 0
+	}
+
+	v.Clear()
+	fmt.Fprint(v, input)
+	v.SetCursor(len(input), 0)
+	return nil
+}
+
 func updateFilePathSuggestions(g *gocui.Gui, v *gocui.View) error {
 	buf := v.Buffer()
 	input := strings.TrimSpace(buf)
@@ -578,6 +610,8 @@ func enableLoadDialogKeybindings(g *gocui.Gui) {
 		return layout(g)
 	})
 	g.SetKeybinding("load", gocui.KeyTab, gocui.ModNone, autocompleteFilePath)
+	g.SetKeybinding("load", gocui.KeyCtrlX, gocui.ModNone, autocompleteFilePath)
+	g.SetKeybinding("load", gocui.KeyCtrlY, gocui.ModNone, autocompleteFilePathBackward)
 	// Remove default prompt when user types any character
 	g.SetKeybinding("load", 0, gocui.ModNone, clearLoadPromptOnRune)
 }

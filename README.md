@@ -6,6 +6,8 @@ A simple chess UI in the terminal
 
 ## Navigation
 
+### Basic Navigation
+
 The navigation is Vim based, so you can use the following keys to navigate:
 
 - `h` - move left
@@ -26,14 +28,14 @@ The navigation is Vim based, so you can use the following keys to navigate:
 - `x` - move forward in the move history
 These defaults can be changed in the config.json file.
 
-## Loading and Saving
+### Load dialog navigation
 
-You can save the current game state by pressing `w`. The game will be saved in
-the `saves` directory. You can load a game by pressing the `a` key and then selecting
-the desired save file. Cancelling the loading dialog is be done by pressing `Ctrl+q`.
+The load dialog can be navigated using the following keys:
 
-By pressing `tab` the loading dialog will autocomplete the folder and file names.
-Pressing `tab` multiple times will cycle through the available folders and files.
+- `Ctrl+y` - move up in the auto-complete list
+- `Ctrl+x` - move down in the auto-complete list
+- `Enter` - select the current file for loading
+- `Ctrl+q` - cancel the loading dialog
 
 ## Engine
 
