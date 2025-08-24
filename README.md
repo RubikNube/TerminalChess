@@ -30,7 +30,10 @@ These defaults can be changed in the config.json file.
 
 You can save the current game state by pressing `w`. The game will be saved in
 the `saves` directory. You can load a game by pressing the `a` key and then selecting
-the desired save file.
+the desired save file. Cancelling the loading dialog is be done by pressing `Ctrl+q`.
+
+By pressing `tab` the loading dialog will autocomplete the folder and file names.
+Pressing `tab` multiple times will cycle through the available folders and files.
 
 ## Engine
 

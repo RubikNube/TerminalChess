@@ -61,7 +61,7 @@ func layout(g *gocui.Gui) error {
 	// Render load dialog if needed
 	if showLoadDialog {
 		loadWidth := 40
-		loadHeight := 5
+		loadHeight := 2 // Only one input line (plus title)
 		x := 5
 		y := 3
 		if v, err := g.SetView("load", x, y, x+loadWidth, y+loadHeight); err != nil {
@@ -384,13 +384,23 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 }
 
 func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
+	log.Println("Handling load game...")
 	buf := v.Buffer()
 	lines := strings.Split(buf, "\n")
-	if len(lines) < 2 {
+	log.Println("Input lines:", lines)
+	path := strings.TrimSpace(lines[0])
+	if path == "" {
 		showInfoMessage(g, "Please enter a valid path.")
+		log.Println("No path entered.")
 		return nil
 	}
-	path := strings.TrimSpace(lines[1])
+	if !filepath.IsAbs(path) {
+		wd, err := os.Getwd()
+		if err == nil {
+			path = filepath.Join(wd, path)
+		}
+	}
+	log.Println("Trying to open path:", path)
 	f, err := os.Open(path)
 	if err != nil {
 		showInfoMessage(g, fmt.Sprintf("Failed to open file: %v", err))
@@ -422,6 +432,7 @@ func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
 	showLoadDialog = false
 	g.DeleteView("load")
 	g.SetCurrentView("board")
+	enableGlobalKeybindings(g, cfg.Keybindings)
 	showInfoMessage(g, fmt.Sprintf("Loaded game from %s", path))
 	return layout(g)
 }
@@ -430,29 +441,17 @@ func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
 func autocompleteFilePath(g *gocui.Gui, v *gocui.View) error {
 	buf := v.Buffer()
 	input := strings.TrimSpace(buf)
-	dir, filePrefix := filepath.Split(input)
+	dir, _ := filepath.Split(input)
 	if dir == "" {
 		dir = "."
 	}
 
-	// Only recalculate matches if prefix changed or no matches cached
-	if filePrefix != cyclePrefix || cycleMatches == nil {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil
-		}
-		var matches []string
-		for _, entry := range entries {
-			name := entry.Name()
-			if strings.HasPrefix(name, filePrefix) {
-				matches = append(matches, name)
-			}
-		}
-		cyclePrefix = filePrefix
-		cycleMatches = matches
-		cycleIndex = 0
+	// If no cached matches, update suggestions first
+	if len(cycleMatches) == 0 {
+		updateFilePathSuggestions(g, v)
 	}
 
+	// Only use cached matches when Tab is pressed; do not recalculate here
 	if len(cycleMatches) == 1 {
 		// Single match, autocomplete directly
 		input = filepath.Join(dir, cycleMatches[0])
@@ -470,6 +469,55 @@ func autocompleteFilePath(g *gocui.Gui, v *gocui.View) error {
 
 	v.Clear()
 	fmt.Fprint(v, input)
+	// Move cursor to end of input
+	v.SetCursor(len(input), 0)
+	return nil
+}
+
+func updateFilePathSuggestions(g *gocui.Gui, v *gocui.View) error {
+	buf := v.Buffer()
+	input := strings.TrimSpace(buf)
+	dir, filePrefix := filepath.Split(input)
+	if dir == "" {
+		dir = "."
+	}
+	// Clean the directory path
+	dir = filepath.Clean(dir)
+	// If input ends with a slash, suggest files inside that directory
+	if strings.HasSuffix(input, string(os.PathSeparator)) {
+		dir = filepath.Clean(input)
+		filePrefix = ""
+	}
+	// If dir is not absolute, resolve relative to current working directory
+	if !filepath.IsAbs(dir) {
+		wd, err := os.Getwd()
+		if err == nil {
+			dir = filepath.Join(wd, dir)
+		}
+	}
+	// Check if dir is a valid directory before reading
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		cycleMatches = nil
+		cycleIndex = 0
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		cycleMatches = nil
+		cycleIndex = 0
+		return nil
+	}
+	var matches []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, filePrefix) {
+			matches = append(matches, name)
+		}
+	}
+	cyclePrefix = filePrefix
+	cycleMatches = matches
+	cycleIndex = 0
 	return nil
 }
 
@@ -559,6 +607,10 @@ func (e *loadEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modif
 			e.cleared = true
 		}
 	}
+	// Prevent newlines (ignore Enter key)
+	if key == gocui.KeyEnter {
+		return
+	}
 	gocui.DefaultEditor.Edit(v, key, ch, mod)
 }
 
@@ -576,8 +628,23 @@ func clearLoadPromptOnInput(g *gocui.Gui, v *gocui.View) error {
 }
 
 func main() {
+	// Ensure "logs" directory exists and set up logging to "logs/app.log"
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logs directory: %v\n", err)
+		os.Exit(1)
+	}
+	logPath := filepath.Join(logDir, "app.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+
+	log.Println("Starting Terminal Chess...")
 	// Load config
-	var err error
 	cfg, err = loadConfig("config.json")
 	if err != nil {
 		log.Panicln("Failed to load config:", err)
