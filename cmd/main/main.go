@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,12 +14,17 @@ import (
 	"github.com/RubikNube/TerminalChess/pkg/engine"
 	"github.com/RubikNube/TerminalChess/pkg/gui"
 	"github.com/RubikNube/TerminalChess/pkg/history"
+	"github.com/RubikNube/TerminalChess/pkg/websocket"
 	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
 )
 
 type Config struct {
 	Keybindings map[string]string `json:"keybindings"`
+	WebUI       struct {
+		Enable bool `json:"useWebUI"`
+		Port   int  `json:"port"`
+	} `json:"webUI"`
 }
 
 var (
@@ -661,28 +667,29 @@ func clearLoadPromptOnInput(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func main() {
-	// Ensure "logs" directory exists and set up logging to "logs/app.log"
-	logDir := "logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create logs directory: %v\n", err)
-		os.Exit(1)
-	}
-	logPath := filepath.Join(logDir, "app.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
-		os.Exit(1)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
+func startWebServer(port int) {
+	log.Println("Starting Terminal Chess Web Server...")
+	// Serve the chess.html file at the root
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join("web", "chess.html"))
+	})
 
-	log.Println("Starting Terminal Chess...")
-	// Load config
-	cfg, err = loadConfig("config.json")
-	if err != nil {
-		log.Panicln("Failed to load config:", err)
+	// WebSocket handler at /ws
+	http.HandleFunc("/ws", websocket.ServeWs)
+
+	// Optionally serve static assets (CSS, JS, etc.) from /web/
+	fs := http.FileServer(http.Dir("web"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	addr := fmt.Sprintf(":%d", port)
+	log.Printf("Server starting at %s...", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("ListenAndServe: %v", err)
 	}
+}
+
+func startTerminalUI() {
+	log.Println("Starting Terminal UI...")
 	keybindings := cfg.Keybindings
 
 	g, err := gocui.NewGui(gocui.OutputNormal)
@@ -707,5 +714,35 @@ func main() {
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
+	}
+}
+
+func main() {
+	// Ensure "logs" directory exists and set up logging to "logs/app.log"
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logs directory: %v\n", err)
+		os.Exit(1)
+	}
+	logPath := filepath.Join(logDir, "app.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+
+	log.Println("Starting Terminal Chess...")
+	// Load config
+	cfg, err = loadConfig("config.json")
+	if err != nil {
+		log.Panicln("Failed to load config:", err)
+	}
+
+	if cfg.WebUI.Enable {
+		startWebServer(cfg.WebUI.Port)
+	} else {
+		startTerminalUI()
 	}
 }

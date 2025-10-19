@@ -1,0 +1,41 @@
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  background: #060936;
+  margin: 0;
+  padding: 20px;
+}
+
+#board {
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  grid-template-columns: repeat(8, 1fr);
+  border: 2px solid #333;
+  width: 80vw; /* Responsive width */
+  max-width: 90vh; /* Prevents board from being too wide */
+  aspect-ratio: 1/1; /* Keeps board square */
+  margin: 20px auto;
+}
+
+.cell {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1/1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1rem, 6vw, 4rem); /* Responsive font size */
+  cursor: pointer;
+}
+
+.white {
+  background: #f0d9b5;
+}
+.black {
+  background: #b58863;
+}
+.selected {
+  outline: 2px solid red;
+}
