@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -389,6 +390,42 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Copy the current game PGN to the clipboard and show notification in InfoView
+func copyPGNToClipboard(g *gocui.Gui, v *gocui.View) error {
+	hist := history.GetHistory()
+	game := chess.NewGame()
+	for _, moveStr := range hist {
+		move, err := chess.UCINotation{}.Decode(game.Position(), moveStr)
+		if err == nil {
+			game.Move(move)
+		}
+	}
+	pgn := game.String()
+	if pgn == "" {
+		showInfoMessage(g, "No moves to copy.")
+		return nil
+	}
+
+	// Use xclip to copy to clipboard (Linux)
+	cmd := exec.Command("wl-copy")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		showInfoMessage(g, "Failed to access clipboard.")
+		return nil
+	}
+	if err := cmd.Start(); err != nil {
+		showInfoMessage(g, "Failed to start clipboard command.")
+		return nil
+	}
+	_, _ = io.WriteString(stdin, pgn)
+	stdin.Close()
+	cmd.Wait()
+
+	log.Println("Copied PGN to clipboard: '" + pgn + "'")
+	showInfoMessage(g, "PGN copied to clipboard.")
+	return nil
+}
+
 func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
 	log.Println("Handling load game...")
 	buf := v.Buffer()
@@ -578,6 +615,7 @@ func enableGlobalKeybindings(g *gocui.Gui, keybindings map[string]string) {
 	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
 	saveGameKey := []rune(keybindings["saveGame"])[0]
 	loadGameKey := []rune(keybindings["loadGame"])[0]
+	copyPGNKey := []rune(keybindings["copyPGN"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
@@ -595,6 +633,7 @@ func enableGlobalKeybindings(g *gocui.Gui, keybindings map[string]string) {
 	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
 	g.SetKeybinding("", clearSelectionKey, gocui.ModNone, clearSelection)
 	g.SetKeybinding("", loadGameKey, gocui.ModNone, openLoadDialog)
+	g.SetKeybinding("", copyPGNKey, gocui.ModNone, copyPGNToClipboard)
 }
 
 func enableLoadDialogKeybindings(g *gocui.Gui) {

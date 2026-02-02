@@ -6,6 +6,7 @@
     "moveDown": "j",
     "quit": "q",
     "saveGame": "w",
+    "copyPGN": "W",
     "loadGame": "a",
     "pick": "p",
     "drop": "d",
@@ -18,7 +19,7 @@
     "historyBackward": "y"
   },
   "webUI": {
-    "useWebUI": true,
+    "useWebUI": false,
     "port": 3000
   }
 }
