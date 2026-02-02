@@ -17,6 +17,7 @@ The navigation is Vim based, so you can use the following keys to navigate:
 - `q` - quit the game
 - `r` - reset the game
 - `w` - save the game into the `saves` directory
+- `W` - copy the current game PGN to the clipboard
 - `a` - load a game from the given path
 - `p` - pick a piece
 - `c` - clears the current selection

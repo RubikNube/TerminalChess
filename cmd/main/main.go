@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,12 +15,17 @@ import (
 	"github.com/RubikNube/TerminalChess/pkg/engine"
 	"github.com/RubikNube/TerminalChess/pkg/gui"
 	"github.com/RubikNube/TerminalChess/pkg/history"
+	"github.com/RubikNube/TerminalChess/pkg/websocket"
 	"github.com/corentings/chess"
 	"github.com/jroimartin/gocui"
 )
 
 type Config struct {
 	Keybindings map[string]string `json:"keybindings"`
+	WebUI       struct {
+		Enable bool `json:"useWebUI"`
+		Port   int  `json:"port"`
+	} `json:"webUI"`
 }
 
 var (
@@ -383,6 +390,42 @@ func saveGameAsPGN(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Copy the current game PGN to the clipboard and show notification in InfoView
+func copyPGNToClipboard(g *gocui.Gui, v *gocui.View) error {
+	hist := history.GetHistory()
+	game := chess.NewGame()
+	for _, moveStr := range hist {
+		move, err := chess.UCINotation{}.Decode(game.Position(), moveStr)
+		if err == nil {
+			game.Move(move)
+		}
+	}
+	pgn := game.String()
+	if pgn == "" {
+		showInfoMessage(g, "No moves to copy.")
+		return nil
+	}
+
+	// Use xclip to copy to clipboard (Linux)
+	cmd := exec.Command("wl-copy")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		showInfoMessage(g, "Failed to access clipboard.")
+		return nil
+	}
+	if err := cmd.Start(); err != nil {
+		showInfoMessage(g, "Failed to start clipboard command.")
+		return nil
+	}
+	_, _ = io.WriteString(stdin, pgn)
+	stdin.Close()
+	cmd.Wait()
+
+	log.Println("Copied PGN to clipboard: '" + pgn + "'")
+	showInfoMessage(g, "PGN copied to clipboard.")
+	return nil
+}
+
 func handleLoadGame(g *gocui.Gui, v *gocui.View) error {
 	log.Println("Handling load game...")
 	buf := v.Buffer()
@@ -572,6 +615,7 @@ func enableGlobalKeybindings(g *gocui.Gui, keybindings map[string]string) {
 	backwardHistoryKey := []rune(keybindings["historyBackward"])[0]
 	saveGameKey := []rune(keybindings["saveGame"])[0]
 	loadGameKey := []rune(keybindings["loadGame"])[0]
+	copyPGNKey := []rune(keybindings["copyPGN"])[0]
 
 	g.SetKeybinding("", moveLeftKey, gocui.ModNone, moveLeft)
 	g.SetKeybinding("", moveRightKey, gocui.ModNone, moveRight)
@@ -589,6 +633,7 @@ func enableGlobalKeybindings(g *gocui.Gui, keybindings map[string]string) {
 	g.SetKeybinding("", saveGameKey, gocui.ModNone, saveGameAsPGN)
 	g.SetKeybinding("", clearSelectionKey, gocui.ModNone, clearSelection)
 	g.SetKeybinding("", loadGameKey, gocui.ModNone, openLoadDialog)
+	g.SetKeybinding("", copyPGNKey, gocui.ModNone, copyPGNToClipboard)
 }
 
 func enableLoadDialogKeybindings(g *gocui.Gui) {
@@ -661,28 +706,29 @@ func clearLoadPromptOnInput(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func main() {
-	// Ensure "logs" directory exists and set up logging to "logs/app.log"
-	logDir := "logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create logs directory: %v\n", err)
-		os.Exit(1)
-	}
-	logPath := filepath.Join(logDir, "app.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
-		os.Exit(1)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
+func startWebServer(port int) {
+	log.Println("Starting Terminal Chess Web Server...")
+	// Serve the chess.html file at the root
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join("web", "chess.html"))
+	})
 
-	log.Println("Starting Terminal Chess...")
-	// Load config
-	cfg, err = loadConfig("config.json")
-	if err != nil {
-		log.Panicln("Failed to load config:", err)
+	// WebSocket handler at /ws
+	http.HandleFunc("/ws", websocket.ServeWs)
+
+	// Optionally serve static assets (CSS, JS, etc.) from /web/
+	fs := http.FileServer(http.Dir("web"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	addr := fmt.Sprintf(":%d", port)
+	log.Printf("Server starting at %s...", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("ListenAndServe: %v", err)
 	}
+}
+
+func startTerminalUI() {
+	log.Println("Starting Terminal UI...")
 	keybindings := cfg.Keybindings
 
 	g, err := gocui.NewGui(gocui.OutputNormal)
@@ -707,5 +753,35 @@ func main() {
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
+	}
+}
+
+func main() {
+	// Ensure "logs" directory exists and set up logging to "logs/app.log"
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logs directory: %v\n", err)
+		os.Exit(1)
+	}
+	logPath := filepath.Join(logDir, "app.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+
+	log.Println("Starting Terminal Chess...")
+	// Load config
+	cfg, err = loadConfig("config.json")
+	if err != nil {
+		log.Panicln("Failed to load config:", err)
+	}
+
+	if cfg.WebUI.Enable {
+		startWebServer(cfg.WebUI.Port)
+	} else {
+		startTerminalUI()
 	}
 }
